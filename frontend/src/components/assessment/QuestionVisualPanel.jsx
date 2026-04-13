@@ -290,13 +290,21 @@ const MiniOrb = ({ color = '#38BDF8' }) => {
 
 const QuestionVisualPanel = ({ question }) => {
   const floatingRefs = useRef([]);
+  const publicBasePath = useMemo(() => {
+    const baseUrl = String(import.meta?.env?.BASE_URL || '').trim();
+    if (!baseUrl || baseUrl === '/') {
+      return '';
+    }
+
+    return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  }, []);
 
   const visualKey = useMemo(() => inferVisualKey(question), [question]);
   const visual = VISUAL_MAP[visualKey] || VISUAL_MAP.general;
   const VisualIcon = visual.icon;
   const primaryImageSrc = useMemo(
-    () => `${process.env.PUBLIC_URL || ''}/visuals/${VISUAL_IMAGE_FILES[visualKey] || VISUAL_IMAGE_FILES.general}`,
-    [visualKey]
+    () => `${publicBasePath}/visuals/${VISUAL_IMAGE_FILES[visualKey] || VISUAL_IMAGE_FILES.general}`,
+    [publicBasePath, visualKey]
   );
   const fallbackImageSrc = useMemo(
     () => buildFallbackImageDataUri({ visualKey, visual }),

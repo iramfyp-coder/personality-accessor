@@ -1,5 +1,20 @@
 const trimTrailingSlash = (value) => (value.endsWith('/') ? value.slice(0, -1) : value);
 
+const readEnvValue = ({ viteKey, legacyKey }) => {
+  const viteValue = import.meta?.env?.[viteKey];
+  if (typeof viteValue === 'string' && viteValue.trim()) {
+    return viteValue;
+  }
+
+  const legacyValue =
+    typeof process !== 'undefined' && process?.env ? process.env[legacyKey] : '';
+  if (typeof legacyValue === 'string' && legacyValue.trim()) {
+    return legacyValue;
+  }
+
+  return '';
+};
+
 const normalizeBaseUrl = (value) => {
   if (!value) {
     return '';
@@ -28,9 +43,24 @@ const normalizeBaseUrl = (value) => {
   return trimmedValue;
 };
 
-export const API_URL = normalizeBaseUrl(process.env.REACT_APP_API_URL) || '/api';
-export const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
-export const APP_RUNTIME_ENV = process.env.REACT_APP_ENV || 'development';
+export const API_URL =
+  normalizeBaseUrl(
+    readEnvValue({
+      viteKey: 'VITE_API_URL',
+      legacyKey: 'REACT_APP_API_URL',
+    })
+  ) || '/api';
+
+export const GOOGLE_CLIENT_ID = readEnvValue({
+  viteKey: 'VITE_GOOGLE_CLIENT_ID',
+  legacyKey: 'REACT_APP_GOOGLE_CLIENT_ID',
+});
+
+export const APP_RUNTIME_ENV =
+  readEnvValue({
+    viteKey: 'VITE_APP_ENV',
+    legacyKey: 'REACT_APP_ENV',
+  }) || 'development';
 
 export const APP_ENV = {
   API_URL,

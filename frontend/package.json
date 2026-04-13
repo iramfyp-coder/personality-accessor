@@ -2,6 +2,10 @@
   "name": "assessor",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.5.1"
+  },
   "dependencies": {
     "@barba/core": "^2.10.3",
     "@react-oauth/google": "^0.13.4",
@@ -23,27 +27,26 @@
     "react-dom": "^19.1.0",
     "react-icons": "^5.5.0",
     "react-router-dom": "^7.11.0",
-    "react-scripts": "5.0.1",
     "recharts": "^2.15.3",
     "three": "^0.183.2",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "lint": "eslint \"src/**/*.{js,jsx}\"",
-    "typecheck": "echo \"No TypeScript files in frontend\"",
-    "eject": "react-scripts eject"
+    "start": "vite",
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run",
+    "preview": "vite preview",
+    "lint": "eslint src",
+    "typecheck": "echo \"No TypeScript files in frontend\""
   },
   "devDependencies": {
-    "eslint": "^8.57.1"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "@eslint/js": "^9.37.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "eslint": "^9.37.0",
+    "jsdom": "^27.0.1",
+    "vite": "^7.1.11",
+    "vitest": "^3.2.4"
   },
   "browserslist": {
     "production": [
@@ -56,9 +59,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "overrides": {
-    "@babel/plugin-proposal-class-properties": "npm:@babel/plugin-transform-class-properties@^7.27.1",
-    "@babel/plugin-proposal-private-property-in-object": "npm:@babel/plugin-transform-private-property-in-object@^7.27.1"
   }
 }
