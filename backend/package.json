@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "NODE_ENV=development node server.js",
-    "test": "node --test tests/**/*.test.js",
+    "test": "node --test tests/*.test.js",
     "lint": "eslint . --ext .js",
     "typecheck": "echo \"No TypeScript files in backend\"",
     "check:syntax": "find . -path './node_modules' -prune -o -name '*.js' -print | xargs -n1 node --check",
