@@ -1,13 +1,19 @@
 const express = require('express');
-const router = express.Router();
 const Question = require('../models/Question');
+const { sendSuccess } = require('../utils/response');
 
-router.get('/', async (req, res) => { 
+const router = express.Router();
+
+router.get('/', async (req, res, next) => {
   try {
-    const questions = await Question.find();
-    res.json(questions);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const questions = await Question.find().sort({ _id: 1 });
+
+    return sendSuccess(res, {
+      data: { questions },
+      message: 'Questions fetched successfully',
+    });
+  } catch (error) {
+    return next(error);
   }
 });
 

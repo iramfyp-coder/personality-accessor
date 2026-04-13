@@ -4,7 +4,10 @@
   "main": "server.js",
   "scripts": {
     "seed:questions": "node scripts/seedQuestions.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate:assessment-results": "node scripts/migrateAssessmentsToAssessmentResults.js",
+    "test:assessment-flow": "node scripts/testAssessmentFlow.js",
+    "train:career-ml": "node scripts/trainCareerRandomForest.js",
+    "test": "echo \"No backend tests configured\"",
     "start": "node server.js"
   },
   "keywords": [],
@@ -13,7 +16,6 @@
   "description": "",
   "dependencies": {
     "bcrypt": "^6.0.0",
-    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
@@ -21,7 +23,11 @@
     "google-auth-library": "^10.5.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.12.0",
     "mongodb": "^7.0.0",
-    "mongoose": "^8.20.2"
+    "mongoose": "^8.20.2",
+    "multer": "^2.1.1",
+    "openai": "^6.34.0",
+    "pdf-parse": "^2.4.5"
   }
 }

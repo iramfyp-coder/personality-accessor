@@ -1,99 +1,165 @@
-const express = require("express");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const User = require("../models/User");
-const { OAuth2Client } = require('google-auth-library');  // ← ADD THIS
-const { validateSignup, validateLogin } = require("../middleware/validateInput");
+const express = require('express');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
+const User = require('../models/User');
+const authMiddleware = require('../middleware/authMiddleware');
+const { validateSignup, validateLogin } = require('../middleware/validateInput');
+const createRateLimiter = require('../middleware/rateLimiter');
+const { config } = require('../config/env');
+const { sendSuccess } = require('../utils/response');
+const { createHttpError } = require('../utils/httpError');
 
 const router = express.Router();
 
-// Your existing Google client (global)
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-// 1. EXISTING SIGNUP (unchanged)
-router.post("/signup", validateSignup, async (req, res) => {
-  const { name, email, password } = req.body;
-
-  const exists = await User.findOne({ email });
-  if (exists) return res.status(400).json({ message: "User already exists" });
-
-  const hashed = await bcrypt.hash(password, 10);
-
-  const user = new User({ name, email, password: hashed });
-  await user.save();
-
-  res.status(201).json({ message: "Account created" });
+const authRateLimiter = createRateLimiter({
+  windowMs: config.authRateLimitWindowMs,
+  max: config.authRateLimitMax,
+  message: 'Too many authentication attempts. Please try again later.',
 });
 
-// 2. EXISTING LOGIN (unchanged)
-router.post("/login", validateLogin, async (req, res) => {
-  const { email, password } = req.body;
+router.use(authRateLimiter);
 
-  const user = await User.findOne({ email });
-  if (!user) return res.status(401).json({ message: "Invalid credentials" });
+const googleClient = config.googleClientId ? new OAuth2Client(config.googleClientId) : null;
 
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) return res.status(401).json({ message: "Invalid credentials" });
-
-  const token = jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
-  );
-
-  res.json({
-    message: "Login successful",
-    token,
-    userId: user._id,
-    role: user.role
+const signAuthToken = (user) =>
+  jwt.sign({ id: user._id, role: user.role }, config.jwtSecret, {
+    expiresIn: '1d',
   });
+
+router.post('/signup', validateSignup, async (req, res, next) => {
+  try {
+    const { name, email, password } = req.body;
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return next(createHttpError(400, 'User already exists'));
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword,
+    });
+
+    await user.save();
+
+    console.info(`[AUTH] signup success userId=${user._id} email=${email}`);
+
+    return sendSuccess(res, {
+      status: 201,
+      data: { userId: user._id, role: user.role },
+      message: 'Account created',
+    });
+  } catch (error) {
+    console.info(`[AUTH] signup failed email=${req.body?.email || 'unknown'}`);
+    return next(error);
+  }
 });
 
-// 3. NEW GOOGLE AUTH ROUTE (ADD THIS)
-router.post("/google", async (req, res) => {
+router.post('/login', validateLogin, async (req, res, next) => {
   try {
-    const { token } = req.body;
+    const { email, password } = req.body;
 
-    // Verify Google token
+    const user = await User.findOne({ email });
+    if (!user || !user.password) {
+      return next(createHttpError(401, 'Invalid credentials'));
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch) {
+      return next(createHttpError(401, 'Invalid credentials'));
+    }
+
+    const token = signAuthToken(user);
+
+    console.info(`[AUTH] login success userId=${user._id} email=${email}`);
+
+    return sendSuccess(res, {
+      data: {
+        token,
+        userId: user._id,
+        role: user.role,
+      },
+      message: 'Login successful',
+    });
+  } catch (error) {
+    console.info(`[AUTH] login failed email=${req.body?.email || 'unknown'}`);
+    return next(error);
+  }
+});
+
+router.post('/google', async (req, res, next) => {
+  try {
+    if (!googleClient) {
+      return next(createHttpError(503, 'Google auth is not configured'));
+    }
+
+    const { token } = req.body;
+    if (!token) {
+      return next(createHttpError(400, 'Google token is required'));
+    }
+
     const ticket = await googleClient.verifyIdToken({
       idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      audience: config.googleClientId,
     });
 
     const payload = ticket.getPayload();
-    const { email, name, picture, sub: googleId } = payload;
+    const { email, name, sub: googleId } = payload;
 
-    // Find or create user
     let user = await User.findOne({ email });
-    
     if (!user) {
-      // Create new user (no password needed for Google users)
       user = new User({
-        googleId,        // Add this field to User model if missing
         name,
         email,
-        isVerified: true // Google users auto-verified
+        googleId,
       });
+
       await user.save();
     }
 
-    // Generate JWT (same format as regular login)
-    const jwtToken = jwt.sign(
-      { id: user._id, role: user.role || 'user' },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
+    const jwtToken = signAuthToken(user);
 
-    res.json({
-      message: "Google login successful",
-      token: jwtToken,
-      userId: user._id,
-      role: user.role || 'user'
+    console.info(`[AUTH] google auth success userId=${user._id} email=${email}`);
+
+    return sendSuccess(res, {
+      data: {
+        token: jwtToken,
+        userId: user._id,
+        role: user.role,
+      },
+      message: 'Google login successful',
     });
-
   } catch (error) {
-    console.error('Google auth error:', error);
-    res.status(400).json({ message: "Invalid Google token" });
+    if (error.message && error.message.toLowerCase().includes('token')) {
+      return next(createHttpError(400, 'Invalid Google token'));
+    }
+
+    return next(error);
+  }
+});
+
+router.get('/me', authMiddleware, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select('_id name email').lean();
+
+    if (!user) {
+      return next(createHttpError(404, 'User not found'));
+    }
+
+    return sendSuccess(res, {
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+      message: 'Authenticated user profile fetched successfully',
+    });
+  } catch (error) {
+    return next(error);
   }
 });
 

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="420" viewBox="0 0 800 420">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#101936"/>
+      <stop offset="100%" stop-color="#0a1124"/>
+    </linearGradient>
+    <linearGradient id="paint" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="50%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="420" rx="18" fill="url(#bg)"/>
+  <rect x="36" y="36" width="728" height="348" rx="16" fill="none" stroke="#5874b9" stroke-opacity="0.35"/>
+  <ellipse cx="290" cy="228" rx="160" ry="126" fill="#12213f" stroke="#4f69a6" stroke-opacity="0.6"/>
+  <circle cx="236" cy="176" r="16" fill="#a78bfa"/>
+  <circle cx="298" cy="148" r="14" fill="#60a5fa"/>
+  <circle cx="352" cy="188" r="15" fill="#22d3ee"/>
+  <circle cx="338" cy="246" r="17" fill="#93c5fd"/>
+  <circle cx="262" cy="254" r="13" fill="#7dd3fc"/>
+  <circle cx="228" cy="224" r="11" fill="#d8b4fe"/>
+  <path d="M458 296 C520 220, 600 180, 700 150" fill="none" stroke="url(#paint)" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="456" cy="298" r="12" fill="#22d3ee"/>
+  <circle cx="540" cy="246" r="9" fill="#93c5fd"/>
+  <circle cx="612" cy="206" r="9" fill="#a78bfa"/>
+  <circle cx="692" cy="154" r="11" fill="#7dd3fc"/>
+  <rect x="492" y="94" width="210" height="68" rx="12" fill="#111d39" stroke="#4f69a6" stroke-opacity="0.6"/>
+  <text x="510" y="136" fill="#d6ebff" font-family="Arial, sans-serif" font-size="22" font-weight="700">Creative Flow</text>
+  <text x="78" y="74" fill="#d8ecff" font-family="Arial, sans-serif" font-size="26" font-weight="700">Creative Context</text>
+  <text x="78" y="97" fill="#9ab8de" font-family="Arial, sans-serif" font-size="13" letter-spacing="1.4">IDEATION / DESIGN / SYNTHESIS</text>
+</svg>

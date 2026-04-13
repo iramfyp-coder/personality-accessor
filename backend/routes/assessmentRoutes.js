@@ -1,42 +1,29 @@
-const mongoose = require('mongoose');
+const express = require('express');
+const authMiddleware = require('../middleware/authMiddleware');
+const {
+  startAssessmentSession,
+  getActiveAssessmentSession,
+  syncAssessmentSession,
+  saveAssessment,
+  getAssessmentsByUser,
+  getAssessmentReport,
+} = require('../Controllers/assessmentController');
 
-const assessmentSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true
-  },
+const router = express.Router();
 
-  traits: {
-    O: Number,
-    C: Number,
-    E: Number,
-    A: Number,
-    N: Number,
-  },
-
-  facets: {
-    type: Object,
-    default: {},
-  },
-
-  careerSuggestions: {
-    type: [String],
-    required: true,
-  },
-
-  answers: {
-    type: Object,
-  },
-
-  personalityLabel: String,
-  primaryTrait: String,
-  primaryScore: Number,
-
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
+router.use(authMiddleware);
+router.use((req, res, next) => {
+  res.setHeader('Deprecation', 'true');
+  res.setHeader('Sunset', 'Wed, 31 Dec 2026 23:59:59 GMT');
+  res.setHeader('Link', '</api/assessment>; rel=\"successor-version\"');
+  next();
 });
 
-module.exports = mongoose.model('Assessment', assessmentSchema);
+router.post('/session/start', startAssessmentSession);
+router.get('/session/:userId', getActiveAssessmentSession);
+router.patch('/session/:sessionId', syncAssessmentSession);
+router.post('/save', saveAssessment);
+router.get('/report/:assessmentId', getAssessmentReport);
+router.get('/:userId', getAssessmentsByUser);
+
+module.exports = router;

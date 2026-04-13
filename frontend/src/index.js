@@ -1,15 +1,31 @@
-import 'bootstrap/dist/css/bootstrap.min.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './index.css';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
-import { GoogleOAuthProvider } from '@react-oauth/google';
+import queryClient from './store/queryClient';
+import { AuthProvider } from './store/AuthStore';
+import { GOOGLE_CLIENT_ID } from './config/env';
+import './index.css';
+import './styles/theme.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-    <GoogleOAuthProvider clientId="373348783271-f5camdkmjadb1r87l6lg7je2spm2ggts.apps.googleusercontent.com">
+
+const app = (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
       <App />
-    </GoogleOAuthProvider>
+    </AuthProvider>
+  </QueryClientProvider>
 );
+
+root.render(
+  GOOGLE_CLIENT_ID ? (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>{app}</GoogleOAuthProvider>
+  ) : (
+    app
+  )
+);
+
 reportWebVitals();

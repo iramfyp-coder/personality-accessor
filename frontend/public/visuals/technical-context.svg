@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="420" viewBox="0 0 800 420">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0e1830"/>
+      <stop offset="100%" stop-color="#0a1224"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#4f8cff"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="420" rx="18" fill="url(#bg)"/>
+  <rect x="36" y="36" width="728" height="348" rx="16" fill="none" stroke="#3f78c8" stroke-opacity="0.35"/>
+  <rect x="82" y="100" width="636" height="230" rx="14" fill="#121d36" stroke="#30548b" stroke-opacity="0.55"/>
+  <path d="M150 178 L122 214 L150 250" fill="none" stroke="url(#accent)" stroke-width="10" stroke-linecap="round"/>
+  <path d="M650 178 L678 214 L650 250" fill="none" stroke="url(#accent)" stroke-width="10" stroke-linecap="round"/>
+  <path d="M286 264 L334 160" fill="none" stroke="url(#accent)" stroke-width="10" stroke-linecap="round"/>
+  <rect x="402" y="164" width="166" height="18" rx="9" fill="#5ea7ff" fill-opacity="0.7"/>
+  <rect x="402" y="202" width="122" height="14" rx="7" fill="#4bc9ef" fill-opacity="0.68"/>
+  <rect x="402" y="234" width="94" height="14" rx="7" fill="#4bc9ef" fill-opacity="0.45"/>
+  <circle cx="640" cy="120" r="26" fill="#22d3ee" fill-opacity="0.2"/>
+  <circle cx="196" cy="320" r="38" fill="#4f8cff" fill-opacity="0.14"/>
+  <text x="78" y="74" fill="#d8ecff" font-family="Arial, sans-serif" font-size="26" font-weight="700">Technical Context</text>
+  <text x="78" y="97" fill="#9ab8de" font-family="Arial, sans-serif" font-size="13" letter-spacing="1.4">SOFTWARE / SYSTEM THINKING</text>
+</svg>

@@ -1,35 +1,75 @@
-// server.js
 const express = require('express');
-const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
 const connectDB = require('./config/db');
+const { config, validateRequiredEnv } = require('./config/env');
+const { sendSuccess, sendError } = require('./utils/response');
 
-dotenv.config();
+validateRequiredEnv();
+
 const app = express();
 
-// Connect to MongoDB
-connectDB();
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) {
+      return callback(null, true);
+    }
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(helmet()); // security headers
+    if (config.corsOrigins.includes(origin)) {
+      return callback(null, true);
+    }
 
-// Test route
+    const error = new Error('Origin not allowed by CORS');
+    error.status = 403;
+    return callback(error);
+  },
+  credentials: true,
+};
+
+app.use(helmet());
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10kb' }));
+
 app.get('/', (req, res) => {
-  res.json({ success: true, message: 'API running' });
+  return sendSuccess(res, {
+    data: { status: 'ok' },
+    message: 'API running',
+  });
 });
 
-// Routes
 app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/assessments', require('./routes/assessmentRoutes'));
 app.use('/api/questions', require('./routes/questionRoutes'));
+app.use('/api/assessments', require('./routes/assessmentRoutes'));
+app.use('/api/assessment', require('./routes/assessmentFlowRoutes'));
+app.use('/api/cv', require('./routes/cvRoutes'));
+app.use('/api/analytics', require('./routes/analyticsRoutes'));
+app.use('/api/ai', require('./routes/aiRoutes'));
 
-// 404 handler
 app.use((req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+  return sendError(res, {
+    status: 404,
+    message: 'Route not found',
+  });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.use((err, req, res, next) => {
+  console.error('ERROR:', err);
+
+  return res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Internal Server Error',
+  });
+});
+
+const startServer = async () => {
+  await connectDB();
+
+  app.listen(config.port, () => {
+    console.log(`Server running on port ${config.port}`);
+  });
+};
+
+startServer().catch((error) => {
+  console.error('Server startup failed:', error.message);
+  process.exit(1);
+});

@@ -1,0 +1,410 @@
+{
+  "software_engineer": {
+    "title": "Software Engineer",
+    "personality": {
+      "O": 68,
+      "C": 74,
+      "E": 45,
+      "A": 52,
+      "N": 36
+    },
+    "skills": [
+      "javascript",
+      "typescript",
+      "node.js",
+      "system design",
+      "problem solving",
+      "debugging"
+    ],
+    "subjects": [
+      "computer science",
+      "data structures",
+      "algorithms",
+      "software engineering",
+      "database systems"
+    ],
+    "aptitude": {
+      "logical_reasoning": 78,
+      "numerical_reasoning": 62,
+      "verbal_reasoning": 50
+    },
+    "interests": [
+      "building products",
+      "automation",
+      "technology",
+      "open source"
+    ],
+    "growthPotential": 88
+  },
+  "frontend_engineer": {
+    "title": "Frontend Engineer",
+    "personality": {
+      "O": 74,
+      "C": 66,
+      "E": 57,
+      "A": 58,
+      "N": 40
+    },
+    "skills": [
+      "react",
+      "html/css",
+      "design systems",
+      "accessibility",
+      "performance optimization"
+    ],
+    "subjects": [
+      "human computer interaction",
+      "software engineering",
+      "web technologies",
+      "design"
+    ],
+    "aptitude": {
+      "logical_reasoning": 64,
+      "numerical_reasoning": 48,
+      "verbal_reasoning": 61
+    },
+    "interests": [
+      "user experience",
+      "visual design",
+      "interactive interfaces"
+    ],
+    "growthPotential": 85
+  },
+  "backend_engineer": {
+    "title": "Backend Engineer",
+    "personality": {
+      "O": 60,
+      "C": 79,
+      "E": 40,
+      "A": 50,
+      "N": 34
+    },
+    "skills": [
+      "apis",
+      "databases",
+      "distributed systems",
+      "cloud",
+      "testing"
+    ],
+    "subjects": [
+      "database systems",
+      "operating systems",
+      "computer networks",
+      "algorithms"
+    ],
+    "aptitude": {
+      "logical_reasoning": 82,
+      "numerical_reasoning": 70,
+      "verbal_reasoning": 44
+    },
+    "interests": [
+      "systems",
+      "scalability",
+      "reliability engineering"
+    ],
+    "growthPotential": 89
+  },
+  "data_analyst": {
+    "title": "Data Analyst",
+    "personality": {
+      "O": 64,
+      "C": 72,
+      "E": 49,
+      "A": 55,
+      "N": 38
+    },
+    "skills": [
+      "sql",
+      "data visualization",
+      "statistics",
+      "excel",
+      "storytelling"
+    ],
+    "subjects": [
+      "statistics",
+      "mathematics",
+      "data analysis",
+      "economics"
+    ],
+    "aptitude": {
+      "logical_reasoning": 72,
+      "numerical_reasoning": 80,
+      "verbal_reasoning": 58
+    },
+    "interests": [
+      "data science",
+      "business insights",
+      "experiment analysis"
+    ],
+    "growthPotential": 83
+  },
+  "machine_learning_engineer": {
+    "title": "Machine Learning Engineer",
+    "personality": {
+      "O": 80,
+      "C": 70,
+      "E": 38,
+      "A": 47,
+      "N": 36
+    },
+    "skills": [
+      "python",
+      "machine learning",
+      "feature engineering",
+      "mlops",
+      "model evaluation"
+    ],
+    "subjects": [
+      "machine learning",
+      "linear algebra",
+      "probability",
+      "statistics",
+      "computer science"
+    ],
+    "aptitude": {
+      "logical_reasoning": 84,
+      "numerical_reasoning": 85,
+      "verbal_reasoning": 42
+    },
+    "interests": [
+      "ai",
+      "research",
+      "data science"
+    ],
+    "growthPotential": 92
+  },
+  "product_manager": {
+    "title": "Product Manager",
+    "personality": {
+      "O": 70,
+      "C": 68,
+      "E": 66,
+      "A": 61,
+      "N": 39
+    },
+    "skills": [
+      "roadmapping",
+      "stakeholder management",
+      "prioritization",
+      "communication",
+      "analytics"
+    ],
+    "subjects": [
+      "business",
+      "product management",
+      "economics",
+      "behavioral psychology"
+    ],
+    "aptitude": {
+      "logical_reasoning": 65,
+      "numerical_reasoning": 55,
+      "verbal_reasoning": 76
+    },
+    "interests": [
+      "strategy",
+      "business",
+      "customer problems",
+      "leadership"
+    ],
+    "growthPotential": 86
+  },
+  "ux_designer": {
+    "title": "UX Designer",
+    "personality": {
+      "O": 82,
+      "C": 57,
+      "E": 54,
+      "A": 67,
+      "N": 42
+    },
+    "skills": [
+      "user research",
+      "figma",
+      "interaction design",
+      "prototyping",
+      "storytelling"
+    ],
+    "subjects": [
+      "design",
+      "human computer interaction",
+      "psychology",
+      "communication"
+    ],
+    "aptitude": {
+      "logical_reasoning": 56,
+      "numerical_reasoning": 36,
+      "verbal_reasoning": 72
+    },
+    "interests": [
+      "design systems",
+      "user experience",
+      "creativity"
+    ],
+    "growthPotential": 81
+  },
+  "devops_engineer": {
+    "title": "DevOps Engineer",
+    "personality": {
+      "O": 57,
+      "C": 80,
+      "E": 43,
+      "A": 49,
+      "N": 33
+    },
+    "skills": [
+      "cloud",
+      "docker",
+      "kubernetes",
+      "ci/cd",
+      "monitoring"
+    ],
+    "subjects": [
+      "computer networks",
+      "operating systems",
+      "cloud computing",
+      "security"
+    ],
+    "aptitude": {
+      "logical_reasoning": 79,
+      "numerical_reasoning": 61,
+      "verbal_reasoning": 42
+    },
+    "interests": [
+      "automation",
+      "infrastructure",
+      "reliability"
+    ],
+    "growthPotential": 90
+  },
+  "technical_program_manager": {
+    "title": "Technical Program Manager",
+    "personality": {
+      "O": 62,
+      "C": 82,
+      "E": 63,
+      "A": 58,
+      "N": 35
+    },
+    "skills": [
+      "program planning",
+      "risk management",
+      "cross-team communication",
+      "delivery execution"
+    ],
+    "subjects": [
+      "project management",
+      "business",
+      "software engineering"
+    ],
+    "aptitude": {
+      "logical_reasoning": 68,
+      "numerical_reasoning": 50,
+      "verbal_reasoning": 73
+    },
+    "interests": [
+      "leadership",
+      "operations",
+      "coordination"
+    ],
+    "growthPotential": 84
+  },
+  "customer_success_manager": {
+    "title": "Customer Success Manager",
+    "personality": {
+      "O": 55,
+      "C": 62,
+      "E": 74,
+      "A": 79,
+      "N": 42
+    },
+    "skills": [
+      "communication",
+      "relationship management",
+      "problem solving",
+      "product knowledge"
+    ],
+    "subjects": [
+      "business communication",
+      "marketing",
+      "management"
+    ],
+    "aptitude": {
+      "logical_reasoning": 49,
+      "numerical_reasoning": 35,
+      "verbal_reasoning": 80
+    },
+    "interests": [
+      "people",
+      "mentoring",
+      "client success"
+    ],
+    "growthPotential": 79
+  },
+  "cybersecurity_analyst": {
+    "title": "Cybersecurity Analyst",
+    "personality": {
+      "O": 58,
+      "C": 76,
+      "E": 42,
+      "A": 52,
+      "N": 34
+    },
+    "skills": [
+      "security analysis",
+      "threat detection",
+      "incident response",
+      "network security"
+    ],
+    "subjects": [
+      "cybersecurity",
+      "computer networks",
+      "cryptography",
+      "operating systems"
+    ],
+    "aptitude": {
+      "logical_reasoning": 77,
+      "numerical_reasoning": 60,
+      "verbal_reasoning": 46
+    },
+    "interests": [
+      "cybersecurity",
+      "risk management",
+      "defense systems"
+    ],
+    "growthPotential": 91
+  },
+  "business_analyst": {
+    "title": "Business Analyst",
+    "personality": {
+      "O": 61,
+      "C": 71,
+      "E": 59,
+      "A": 58,
+      "N": 41
+    },
+    "skills": [
+      "requirements gathering",
+      "analysis",
+      "reporting",
+      "communication",
+      "stakeholder alignment"
+    ],
+    "subjects": [
+      "business",
+      "statistics",
+      "economics",
+      "management"
+    ],
+    "aptitude": {
+      "logical_reasoning": 68,
+      "numerical_reasoning": 61,
+      "verbal_reasoning": 70
+    },
+    "interests": [
+      "business",
+      "data",
+      "process improvement"
+    ],
+    "growthPotential": 82
+  }
+}
