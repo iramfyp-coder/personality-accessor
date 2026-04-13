@@ -1,0 +1,12 @@
+{
+  "name": "personality-assessor",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "lint": "npm run lint --prefix backend && npm run lint --prefix frontend",
+    "test": "npm run test --prefix backend && CI=true npm run test --prefix frontend -- --watchAll=false",
+    "build": "npm run build --prefix frontend && npm run check:syntax --prefix backend",
+    "ci": "npm run lint && npm run test && npm run typecheck && npm run build",
+    "typecheck": "npm run typecheck --prefix backend && npm run typecheck --prefix frontend"
+  }
+}

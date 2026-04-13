@@ -26,6 +26,14 @@ const { generateAssessmentPdfBuffer } = require('../services/assessment/pdf-repo
 const { streamProgress } = require('../services/assessment/progress-stream.service');
 const { analyzeTextAnswer } = require('../services/assessment/text-answer-analysis.service');
 const {
+  ensureJsonObjectPayload,
+  extractSubmittedSessionId,
+  extractSubmittedQuestionId,
+  extractSubmittedQuestionSequence,
+  assertSessionMatch,
+  assertQuestionProvided,
+} = require('../utils/assessmentRequestValidation');
+const {
   getSessionUnifiedAnswers,
   mapResultToLegacySummary,
   normalizeCvData,
@@ -926,18 +934,14 @@ const answerAdaptiveQuestion = async (req, res, next) => {
     });
 
     if (session.stage === 'questionnaire') {
-      const submittedSessionId = toText(req.body?.sessionId);
-      if (submittedSessionId && submittedSessionId !== String(session._id)) {
-        throw createHttpError(400, 'sessionId does not match the active session');
-      }
-
-      const submittedQuestionId = toText(
-        req.body?.questionId || req.body?.currentQuestion?.id || req.body?.currentQuestion?.questionId
-      );
-
-      if (!submittedQuestionId) {
-        throw createHttpError(400, 'questionId is required');
-      }
+      const payload = ensureJsonObjectPayload(req.body);
+      const submittedSessionId = extractSubmittedSessionId(payload);
+      assertSessionMatch({
+        submittedSessionId,
+        activeSessionId: session._id,
+      });
+      const submittedQuestionId = extractSubmittedQuestionId(payload);
+      assertQuestionProvided({ submittedQuestionId });
 
       const currentQuestion = toPublicQuestion(session);
 
@@ -946,11 +950,7 @@ const answerAdaptiveQuestion = async (req, res, next) => {
       }
 
       const currentQuestionId = toQuestionIdentity(currentQuestion);
-      const submittedSequence = Number(
-        req.body?.questionSequence ??
-          req.body?.sequence ??
-          req.body?.currentQuestion?.sequence
-      );
+      const submittedSequence = extractSubmittedQuestionSequence(payload);
       const isCurrentQuestionId = submittedQuestionId === currentQuestionId;
 
       const existingAnswer = getSessionUnifiedAnswers(session).find(
@@ -983,7 +983,7 @@ const answerAdaptiveQuestion = async (req, res, next) => {
 
       if (!existingAnswer) {
         const normalized = await normalizeQuestionAnswer({
-          body: req.body,
+          body: payload,
           question: currentQuestion,
           profileVector: session.profileVector || {},
         });
@@ -1106,8 +1106,9 @@ const answerAdaptiveQuestion = async (req, res, next) => {
 
     if (session.stage === 'behavior') {
       // Backward-compatible behavior stage support for existing in-progress sessions.
-      const promptId = String(req.body?.promptId || '').trim();
-      const text = String(req.body?.text || '').trim();
+      const payload = ensureJsonObjectPayload(req.body);
+      const promptId = String(payload.promptId || '').trim();
+      const text = String(payload.text || '').trim();
 
       if (!promptId) {
         throw createHttpError(400, 'promptId is required');

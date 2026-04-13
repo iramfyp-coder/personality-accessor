@@ -1,21 +1,17 @@
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 const { config, validateRequiredEnv } = require('./config/env');
-const { sendSuccess, sendError } = require('./utils/response');
-
-validateRequiredEnv();
-
-const app = express();
+const { sendSuccess } = require('./utils/response');
+const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    if (config.corsOrigins.includes(origin)) {
+    if (config.isAllowedCorsOrigin(origin)) {
       return callback(null, true);
     }
 
@@ -26,42 +22,55 @@ const corsOptions = {
   credentials: true,
 };
 
-app.use(helmet());
-app.use(cors(corsOptions));
-app.use(express.json({ limit: '10kb' }));
-
-app.get('/', (req, res) => {
-  return sendSuccess(res, {
-    data: { status: 'ok' },
-    message: 'API running',
+const createApp = () => {
+  const app = express();
+  const morganFormat = config.nodeEnv === 'production' ? 'combined' : 'dev';
+  const apiRateLimiter = rateLimit({
+    windowMs: config.apiRateLimitWindowMs,
+    max: config.apiRateLimitMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      success: false,
+      message: 'Too many requests. Please try again later.',
+    },
   });
-});
 
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/questions', require('./routes/questionRoutes'));
-app.use('/api/assessments', require('./routes/assessmentRoutes'));
-app.use('/api/assessment', require('./routes/assessmentFlowRoutes'));
-app.use('/api/cv', require('./routes/cvRoutes'));
-app.use('/api/analytics', require('./routes/analyticsRoutes'));
-app.use('/api/ai', require('./routes/aiRoutes'));
+  app.set('trust proxy', 1);
+  app.use(morgan(morganFormat));
+  app.use(helmet());
+  app.use(cors(corsOptions));
+  app.use(compression());
+  app.use(express.json({ limit: '10kb' }));
+  app.use('/api', apiRateLimiter);
 
-app.use((req, res) => {
-  return sendError(res, {
-    status: 404,
-    message: 'Route not found',
+  app.get('/', (req, res) => {
+    return sendSuccess(res, {
+      data: { status: 'ok' },
+      message: 'API running',
+    });
   });
-});
 
-app.use((err, req, res, next) => {
-  console.error('ERROR:', err);
+  app.get('/api/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
-  return res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal Server Error',
-  });
-});
+  app.use('/api/auth', require('./routes/authRoutes'));
+  app.use('/api/questions', require('./routes/questionRoutes'));
+  app.use('/api/assessments', require('./routes/assessmentRoutes'));
+  app.use('/api/assessment', require('./routes/assessmentFlowRoutes'));
+  app.use('/api/cv', require('./routes/cvRoutes'));
+  app.use('/api/analytics', require('./routes/analyticsRoutes'));
+  app.use('/api/ai', require('./routes/aiRoutes'));
+
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+
+  return app;
+};
+
+const app = createApp();
 
 const startServer = async () => {
+  validateRequiredEnv();
   await connectDB();
 
   app.listen(config.port, () => {
@@ -69,7 +78,15 @@ const startServer = async () => {
   });
 };
 
-startServer().catch((error) => {
-  console.error('Server startup failed:', error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error('Server startup failed:', error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  app,
+  createApp,
+  startServer,
+};
