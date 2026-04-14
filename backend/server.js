@@ -53,6 +53,7 @@ const createApp = () => {
 
   app.get('/api/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
+  app.use('/api/auth', require('./routes/googleAuth.routes'));
   app.use('/api/auth', require('./routes/authRoutes'));
   app.use('/api/questions', require('./routes/questionRoutes'));
   app.use('/api/assessments', require('./routes/assessmentRoutes'));

@@ -13,9 +13,11 @@ const askedQuestionSchema = new mongoose.Schema(
 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String },
   googleId: { type: String, sparse: true },
+  provider: { type: String, default: "local" },
+  avatar: { type: String, default: '' },
   role: { type: String, enum: ["user", "admin"], default: "user" },
   askedQuestions: { type: [askedQuestionSchema], default: [] },
   preferredCareerLens: {

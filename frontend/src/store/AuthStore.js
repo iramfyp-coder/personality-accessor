@@ -9,7 +9,7 @@ import React, {
 import { getCurrentUser } from '../api/authApi';
 
 const AUTH_STORAGE_KEY = 'auth_state';
-const LEGACY_KEYS = ['token', 'userId', 'role', 'userName', 'userEmail'];
+const LEGACY_KEYS = ['token', 'user', 'userId', 'role', 'userName', 'userEmail'];
 
 export const AuthContext = createContext(null);
 
@@ -27,15 +27,31 @@ const getFallbackName = (email = '') => {
 };
 
 const normalizeAuthState = (payload = {}) => {
+  const user = payload.user || {};
   const token = payload.token || '';
-  const email = payload.email || '';
+  const userId = payload.userId || payload.id || user.id || user._id || '';
+  const email = payload.email || user.email || '';
+  const role = payload.role || user.role || 'user';
+  const provider = payload.provider || user.provider || (token ? 'local' : '');
+  const avatar = payload.avatar || user.avatar || '';
+  const name = payload.name || user.name || getFallbackName(email);
 
   return {
     token,
-    userId: payload.userId || payload.id || '',
-    role: payload.role || 'user',
-    name: payload.name || getFallbackName(email),
+    userId,
+    role,
+    name,
     email,
+    provider,
+    avatar,
+    user: {
+      id: userId,
+      name,
+      email,
+      role,
+      provider,
+      avatar,
+    },
     isAuthenticated: Boolean(token),
   };
 };
@@ -59,8 +75,16 @@ const readLegacyAuthState = () => {
     return null;
   }
 
+  let legacyUser = {};
+  try {
+    legacyUser = JSON.parse(localStorage.getItem('user') || '{}');
+  } catch (error) {
+    legacyUser = {};
+  }
+
   return normalizeAuthState({
     token,
+    user: legacyUser,
     userId: localStorage.getItem('userId') || '',
     role: localStorage.getItem('role') || 'user',
     name: localStorage.getItem('userName') || '',
@@ -82,6 +106,7 @@ const persistAuthState = (state) => {
     localStorage.setItem('role', normalized.role);
     localStorage.setItem('userName', normalized.name);
     localStorage.setItem('userEmail', normalized.email);
+    localStorage.setItem('user', JSON.stringify(normalized.user));
   }
 };
 
@@ -155,6 +180,9 @@ export const AuthProvider = ({ children }) => {
           id: profile.id,
           name: profile.name,
           email: profile.email,
+          role: profile.role,
+          provider: profile.provider,
+          avatar: profile.avatar,
         });
       })
       .catch(() => {

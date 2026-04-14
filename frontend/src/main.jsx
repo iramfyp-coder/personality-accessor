@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import { Toaster } from 'react-hot-toast';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import queryClient from './store/queryClient';
@@ -16,6 +17,7 @@ const app = (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <App />
+      <Toaster position="top-right" />
     </AuthProvider>
   </QueryClientProvider>
 );

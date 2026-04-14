@@ -12,8 +12,8 @@ export const login = async (payload) => {
   return unwrap(response);
 };
 
-export const googleLogin = async (googleToken) => {
-  const response = await client.post('/auth/google', { token: googleToken });
+export const googleLogin = async (idToken) => {
+  const response = await client.post('/auth/google', { idToken });
   return unwrap(response);
 };
 

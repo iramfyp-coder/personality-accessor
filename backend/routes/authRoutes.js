@@ -1,7 +1,5 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
 const { validateSignup, validateLogin } = require('../middleware/validateInput');
@@ -9,6 +7,7 @@ const createRateLimiter = require('../middleware/rateLimiter');
 const { config } = require('../config/env');
 const { sendSuccess } = require('../utils/response');
 const { createHttpError } = require('../utils/httpError');
+const { signAuthToken, serializeAuthUser } = require('../services/auth-token.service');
 
 const router = express.Router();
 
@@ -20,16 +19,12 @@ const authRateLimiter = createRateLimiter({
 
 router.use(authRateLimiter);
 
-const googleClient = config.googleClientId ? new OAuth2Client(config.googleClientId) : null;
-
-const signAuthToken = (user) =>
-  jwt.sign({ id: user._id, role: user.role }, config.jwtSecret, {
-    expiresIn: '1d',
-  });
+const normalizeEmail = (value = '') => String(value).trim().toLowerCase();
 
 router.post('/signup', validateSignup, async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, password } = req.body;
+    const email = normalizeEmail(req.body.email);
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -42,6 +37,7 @@ router.post('/signup', validateSignup, async (req, res, next) => {
       name,
       email,
       password: hashedPassword,
+      provider: 'local',
     });
 
     await user.save();
@@ -61,7 +57,8 @@ router.post('/signup', validateSignup, async (req, res, next) => {
 
 router.post('/login', validateLogin, async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = normalizeEmail(req.body.email);
 
     const user = await User.findOne({ email });
     if (!user || !user.password) {
@@ -80,7 +77,8 @@ router.post('/login', validateLogin, async (req, res, next) => {
     return sendSuccess(res, {
       data: {
         token,
-        userId: user._id,
+        user: serializeAuthUser(user),
+        userId: String(user._id),
         role: user.role,
       },
       message: 'Login successful',
@@ -91,60 +89,11 @@ router.post('/login', validateLogin, async (req, res, next) => {
   }
 });
 
-router.post('/google', async (req, res, next) => {
-  try {
-    if (!googleClient) {
-      return next(createHttpError(503, 'Google auth is not configured'));
-    }
-
-    const { token } = req.body;
-    if (!token) {
-      return next(createHttpError(400, 'Google token is required'));
-    }
-
-    const ticket = await googleClient.verifyIdToken({
-      idToken: token,
-      audience: config.googleClientId,
-    });
-
-    const payload = ticket.getPayload();
-    const { email, name, sub: googleId } = payload;
-
-    let user = await User.findOne({ email });
-    if (!user) {
-      user = new User({
-        name,
-        email,
-        googleId,
-      });
-
-      await user.save();
-    }
-
-    const jwtToken = signAuthToken(user);
-
-    console.info(`[AUTH] google auth success userId=${user._id} email=${email}`);
-
-    return sendSuccess(res, {
-      data: {
-        token: jwtToken,
-        userId: user._id,
-        role: user.role,
-      },
-      message: 'Google login successful',
-    });
-  } catch (error) {
-    if (error.message && error.message.toLowerCase().includes('token')) {
-      return next(createHttpError(400, 'Invalid Google token'));
-    }
-
-    return next(error);
-  }
-});
-
 router.get('/me', authMiddleware, async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id).select('_id name email').lean();
+    const user = await User.findById(req.user.id)
+      .select('_id name email role provider avatar')
+      .lean();
 
     if (!user) {
       return next(createHttpError(404, 'User not found'));
@@ -155,6 +104,9 @@ router.get('/me', authMiddleware, async (req, res, next) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
+        provider: user.provider,
+        avatar: user.avatar || '',
       },
       message: 'Authenticated user profile fetched successfully',
     });

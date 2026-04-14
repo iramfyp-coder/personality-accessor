@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { GoogleLogin } from '@react-oauth/google';
 import { useMutation } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import GoogleLoginButton from '../../components/auth/GoogleLoginButton';
 import ScaleIn from '../../components/motion/ScaleIn';
 import { login as loginApi, googleLogin as googleLoginApi } from '../../api/authApi';
 import { GOOGLE_CLIENT_ID } from '../../config/env';
-import { decodeJwtPayload } from '../../utils/jwt';
 import { useAuth } from '../../hooks/useAuth';
 
 const LoginPage = () => {
@@ -24,24 +24,21 @@ const LoginPage = () => {
   const loginMutation = useMutation({
     mutationFn: loginApi,
     onSuccess: (payload) => {
-      auth.login({
-        ...payload,
-        email: form.email,
-      });
+      auth.login(payload);
       navigate('/dashboard');
     },
   });
 
   const googleMutation = useMutation({
     mutationFn: googleLoginApi,
-    onSuccess: (payload, credential) => {
-      const decoded = decodeJwtPayload(credential);
-      auth.login({
-        ...payload,
-        name: decoded?.name,
-        email: decoded?.email,
-      });
+    onSuccess: (payload) => {
+      auth.login(payload);
       navigate('/dashboard');
+    },
+    onError: (error) => {
+      const message = error?.message || 'Google sign-in failed. Please try again.';
+      setFormError(message);
+      toast.error(message);
     },
   });
 
@@ -78,13 +75,14 @@ const LoginPage = () => {
     });
   };
 
-  const handleGoogleSuccess = (credentialResponse) => {
-    if (!credentialResponse?.credential) {
-      setFormError('Google sign-in failed. Please retry.');
-      return;
-    }
+  const handleGoogleSuccess = (idToken) => {
+    googleMutation.mutate(idToken);
+  };
 
-    googleMutation.mutate(credentialResponse.credential);
+  const handleGoogleError = (message) => {
+    const nextMessage = message || 'Google sign-in failed. Please retry.';
+    setFormError(nextMessage);
+    toast.error(nextMessage);
   };
 
   return (
@@ -145,13 +143,9 @@ const LoginPage = () => {
           {GOOGLE_CLIENT_ID && (
             <div className="auth-google">
               <p className="auth-google__divider">or continue with</p>
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => setFormError('Google sign-in failed. Please retry.')}
-                theme="outline"
-                size="large"
-                shape="pill"
-                text="continue_with"
+              <GoogleLoginButton
+                onCredential={handleGoogleSuccess}
+                onError={handleGoogleError}
               />
             </div>
           )}

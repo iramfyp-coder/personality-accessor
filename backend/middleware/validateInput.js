@@ -3,7 +3,7 @@ const { sendError } = require('../utils/response');
 
 const validateSignup = [
   body('name').trim().notEmpty(),
-  body('email').isEmail(),
+  body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 }),
 
   (req, res, next) => {
@@ -16,7 +16,7 @@ const validateSignup = [
 ];
 
 const validateLogin = [
-  body('email').isEmail(),
+  body('email').isEmail().normalizeEmail(),
   body('password').notEmpty(),
 
   (req, res, next) => {
