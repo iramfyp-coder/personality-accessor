@@ -940,23 +940,6 @@ kbd {
   color: #9eb4de;
 }
 
-.question-trait-visual {
-  width: 112px;
-  height: 112px;
-  border-radius: 20px;
-  background: var(--trait-visual-bg, rgba(28, 52, 88, 0.78));
-  border: 1px solid rgba(164, 186, 232, 0.22);
-  display: grid;
-  place-items: center;
-  box-shadow: inset 0 0 0 1px rgba(174, 224, 255, 0.08), 0 10px 24px rgba(6, 14, 28, 0.45);
-}
-
-.question-trait-visual svg {
-  width: 84px;
-  height: 84px;
-  color: var(--trait-visual-accent, #22d3ee);
-}
-
 .question-card__text {
   position: relative;
   color: #eef4ff;
@@ -2784,16 +2767,6 @@ kbd {
   .question-card__hero {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .question-trait-visual {
-    width: 100%;
-    height: 98px;
-  }
-
-  .question-trait-visual svg {
-    width: 72px;
-    height: 72px;
   }
 
   .question-card__actions {

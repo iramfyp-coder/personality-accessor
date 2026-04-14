@@ -3,7 +3,12 @@ const dotenv = require('dotenv');
 
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
-const LOCALHOST_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+const LOCALHOST_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
 const VERCEL_PREVIEW_DOMAIN_PATTERN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
 
 const toInt = (value, fallback) => {

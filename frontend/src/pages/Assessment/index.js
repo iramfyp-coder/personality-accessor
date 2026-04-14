@@ -14,7 +14,6 @@ import Skeleton from '../../components/ui/Skeleton';
 import FadeIn from '../../components/motion/FadeIn';
 import SlideUp from '../../components/motion/SlideUp';
 import ScaleIn from '../../components/motion/ScaleIn';
-import QuestionTraitVisual from '../../components/assessment/QuestionTraitVisual';
 import QuestionGuideCharacter from '../../components/assistant/QuestionGuideCharacter';
 import {
   useActiveSessionQuery,
@@ -538,7 +537,6 @@ const AssessmentPage = () => {
                         </div>
                       </div>
 
-                      <QuestionTraitVisual trait={currentTraitKey} />
                     </div>
 
                     <p className="question-card__text">{currentQuestion.text}</p>
