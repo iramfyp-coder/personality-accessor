@@ -1,12 +1,13 @@
 const AssessmentResult = require('../../models/AssessmentResult');
-const { config } = require('../../config/env');
 const { analyzeBehavior } = require('./behavior-analysis.service');
 const { evaluatePersonalityProfile, getDominantTrait } = require('./personality-engine.service');
 const { recommendCareers } = require('./career-recommendation.service');
-const { computeCognitiveScores } = require('./cognitive-style.service');
-const { toBehaviorVector } = require('./behavior-vector.service');
-const { extractOutputText } = require('./aiJson');
-const { getOpenAiClient } = require('./openaiClient');
+const { buildTraitVector } = require('../trait-vector.service');
+const {
+  generateResultNarrative,
+  computeConfidenceScore,
+} = require('../ai-result-narrative.service');
+const { extractAiCvIntelligence } = require('../ai-cv-intelligence.service');
 const {
   getSessionUnifiedAnswers,
   mapResultToLegacySummary,
@@ -15,59 +16,34 @@ const {
   toLegacyBehaviorAnswers,
 } = require('./unified-contracts.service');
 
+const TRAITS = ['O', 'C', 'E', 'A', 'N'];
+
+const FACET_MODEL = {
+  O: ['O1', 'O2', 'O3', 'O4', 'O5', 'O6'],
+  C: ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'],
+  E: ['E1', 'E2', 'E3', 'E4', 'E5', 'E6'],
+  A: ['A1', 'A2', 'A3', 'A4', 'A5', 'A6'],
+  N: ['N1', 'N2', 'N3', 'N4', 'N5', 'N6'],
+};
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const round = (value) => Math.round(Number(value) || 0);
 
-const FACET_MODEL = {
-  O: [
-    { code: 'O1', label: 'curiosity' },
-    { code: 'O2', label: 'imagination' },
-    { code: 'O3', label: 'creativity' },
-    { code: 'O4', label: 'openness_to_ideas' },
-    { code: 'O5', label: 'emotional_openness' },
-    { code: 'O6', label: 'aesthetic_interest' },
-  ],
-  C: [
-    { code: 'C1', label: 'self_discipline' },
-    { code: 'C2', label: 'organization' },
-    { code: 'C3', label: 'goal_focus' },
-    { code: 'C4', label: 'reliability' },
-    { code: 'C5', label: 'planning' },
-    { code: 'C6', label: 'deliberation' },
-  ],
-  E: [
-    { code: 'E1', label: 'social_energy' },
-    { code: 'E2', label: 'assertiveness' },
-    { code: 'E3', label: 'leadership' },
-    { code: 'E4', label: 'communication_drive' },
-    { code: 'E5', label: 'initiative' },
-    { code: 'E6', label: 'influence_orientation' },
-  ],
-  A: [
-    { code: 'A1', label: 'cooperation' },
-    { code: 'A2', label: 'empathy' },
-    { code: 'A3', label: 'trust' },
-    { code: 'A4', label: 'supportiveness' },
-    { code: 'A5', label: 'humility' },
-    { code: 'A6', label: 'prosocial_behavior' },
-  ],
-  N: [
-    { code: 'N1', label: 'stress_reactivity' },
-    { code: 'N2', label: 'emotional_volatility' },
-    { code: 'N3', label: 'worry_intensity' },
-    { code: 'N4', label: 'pressure_sensitivity' },
-    { code: 'N5', label: 'self_doubt' },
-    { code: 'N6', label: 'threat_focus' },
-  ],
-};
+const toLegacyBehaviorVector = ({ behavior = {}, traits = {} } = {}) => ({
+  leadership: clamp(round(behavior.leadership || 50), 0, 100),
+  risk_tolerance: clamp(round(behavior.risk || 50), 0, 100),
+  decision_speed: clamp(round(behavior.execution || 50), 0, 100),
+  stress_tolerance: clamp(round(100 - Number(traits.N || 50)), 0, 100),
+  team_preference: clamp(round(behavior.collaboration || 50), 0, 100),
+});
 
 const buildTrendVector = (traitScores = {}) => {
   const values = {
-    O: Number(traitScores.O || 0),
-    C: Number(traitScores.C || 0),
-    E: Number(traitScores.E || 0),
-    A: Number(traitScores.A || 0),
-    N: Number(traitScores.N || 0),
+    O: Number(traitScores.O || 50),
+    C: Number(traitScores.C || 50),
+    E: Number(traitScores.E || 50),
+    A: Number(traitScores.A || 50),
+    N: Number(traitScores.N || 50),
   };
 
   const average = Object.values(values).reduce((sum, value) => sum + value, 0) / 5;
@@ -78,230 +54,65 @@ const buildTrendVector = (traitScores = {}) => {
   };
 };
 
-const buildInsightHeatmap = ({ traitScores = {}, cognitiveScores = {}, behaviorVector = {} }) => {
-  const base = {
-    O: Number(traitScores.O || 50),
-    C: Number(traitScores.C || 50),
-    E: Number(traitScores.E || 50),
-    A: Number(traitScores.A || 50),
-    N: Number(traitScores.N || 50),
-  };
-
-  const cognitive = {
-    analytical: Number(cognitiveScores.analytical || 50),
-    creative: Number(cognitiveScores.creative || 50),
-    strategic: Number(cognitiveScores.strategic || 50),
-    systematic: Number(cognitiveScores.systematic || 50),
-    practical: Number(cognitiveScores.practical || 50),
-    abstract: Number(cognitiveScores.abstract || 50),
-  };
-
-  const behavior = {
-    leadership: Number(behaviorVector.leadership || 50),
-    risk_tolerance: Number(behaviorVector.risk_tolerance || 50),
-    decision_speed: Number(behaviorVector.decision_speed || 50),
-    stress_tolerance: Number(behaviorVector.stress_tolerance || 50),
-    team_preference: Number(behaviorVector.team_preference || 50),
-  };
-
-  const traitValues = {
-    O: round(clamp(base.O * 0.76 + cognitive.creative * 0.14 + cognitive.abstract * 0.1, 0, 100)),
-    C: round(
-      clamp(base.C * 0.72 + cognitive.systematic * 0.16 + cognitive.analytical * 0.08 + behavior.decision_speed * 0.04, 0, 100)
-    ),
-    E: round(clamp(base.E * 0.74 + behavior.leadership * 0.16 + behavior.decision_speed * 0.1, 0, 100)),
-    A: round(clamp(base.A * 0.76 + behavior.team_preference * 0.18 + cognitive.practical * 0.06, 0, 100)),
-    N: round(
-      clamp(base.N * 0.72 + (100 - behavior.stress_tolerance) * 0.2 + (100 - behavior.risk_tolerance) * 0.08, 0, 100)
-    ),
-  };
-
-  const insightHeatmap = Object.entries(traitValues).map(([trait, value]) => ({
+const buildInsightHeatmap = ({ traitScores = {}, facetVector = {} }) => {
+  const insightHeatmap = TRAITS.map((trait) => ({
     trait,
-    value: round(value),
+    value: clamp(round(traitScores[trait] || 50), 0, 100),
   }));
 
   const facetScores = {};
 
-  const assignFacet = (trait, code, value) => {
-    facetScores[code] = round(clamp(value, 0, 100));
-  };
+  TRAITS.forEach((trait) => {
+    const base = Number(traitScores[trait] || 50);
+    const codes = FACET_MODEL[trait] || [];
 
-  const O = traitValues.O;
-  assignFacet('O', 'O1', O * 0.72 + cognitive.abstract * 0.28);
-  assignFacet('O', 'O2', O * 0.74 + cognitive.creative * 0.26);
-  assignFacet('O', 'O3', O * 0.68 + cognitive.creative * 0.32);
-  assignFacet('O', 'O4', O * 0.74 + cognitive.strategic * 0.2 + behavior.risk_tolerance * 0.06);
-  assignFacet('O', 'O5', O * 0.78 + traitValues.A * 0.22);
-  assignFacet('O', 'O6', O * 0.82 + cognitive.creative * 0.18);
-
-  const C = traitValues.C;
-  assignFacet('C', 'C1', C * 0.74 + behavior.decision_speed * 0.26);
-  assignFacet('C', 'C2', C * 0.8 + cognitive.systematic * 0.2);
-  assignFacet('C', 'C3', C * 0.76 + cognitive.strategic * 0.24);
-  assignFacet('C', 'C4', C * 0.74 + cognitive.analytical * 0.2 + behavior.stress_tolerance * 0.06);
-  assignFacet('C', 'C5', C * 0.78 + cognitive.systematic * 0.22);
-  assignFacet('C', 'C6', C * 0.8 + (100 - traitValues.N) * 0.2);
-
-  const E = traitValues.E;
-  assignFacet('E', 'E1', E * 0.74 + traitValues.A * 0.26);
-  assignFacet('E', 'E2', E * 0.78 + behavior.decision_speed * 0.22);
-  assignFacet('E', 'E3', E * 0.68 + behavior.leadership * 0.32);
-  assignFacet('E', 'E4', E * 0.74 + behavior.decision_speed * 0.26);
-  assignFacet('E', 'E5', E * 0.72 + behavior.risk_tolerance * 0.28);
-  assignFacet('E', 'E6', E * 0.8 + (100 - traitValues.N) * 0.2);
-
-  const A = traitValues.A;
-  assignFacet('A', 'A1', A * 0.78 + behavior.team_preference * 0.22);
-  assignFacet('A', 'A2', A * 0.74 + traitValues.O * 0.26);
-  assignFacet('A', 'A3', A * 0.8 + behavior.team_preference * 0.2);
-  assignFacet('A', 'A4', A * 0.72 + behavior.team_preference * 0.28);
-  assignFacet('A', 'A5', A * 0.74 + (100 - traitValues.E) * 0.26);
-  assignFacet('A', 'A6', A * 0.72 + traitValues.O * 0.14 + behavior.team_preference * 0.14);
-
-  const N = traitValues.N;
-  assignFacet('N', 'N1', N * 0.8 + (100 - behavior.stress_tolerance) * 0.2);
-  assignFacet('N', 'N2', N * 0.74 + (100 - behavior.decision_speed) * 0.26);
-  assignFacet('N', 'N3', N * 0.78 + (100 - traitValues.E) * 0.22);
-  assignFacet('N', 'N4', N * 0.74 + (100 - behavior.stress_tolerance) * 0.26);
-  assignFacet('N', 'N5', N * 0.76 + (100 - behavior.risk_tolerance) * 0.24);
-  assignFacet('N', 'N6', N * 0.78 + (100 - behavior.stress_tolerance) * 0.22);
-
-  const facetDefinitions = Object.values(FACET_MODEL).flat().reduce((accumulator, facet) => {
-    accumulator[facet.code] = facet.label;
-    return accumulator;
-  }, {});
+    codes.forEach((code, index) => {
+      const explicit = Number(facetVector[String(code || '').toLowerCase()] || 0);
+      const synthetic = clamp(round(base + (index - 2.5) * 2), 0, 100);
+      facetScores[code] = explicit ? clamp(round(explicit), 0, 100) : synthetic;
+    });
+  });
 
   return {
     insightHeatmap,
     facetScores,
-    facetDefinitions,
+    facetDefinitions: Object.values(FACET_MODEL).flat().reduce((accumulator, code) => {
+      accumulator[code] = code;
+      return accumulator;
+    }, {}),
   };
 };
 
-const toAnswerFivePoint = ({ answer = {}, question = {} }) => {
-  const type = String(question?.type || answer?.type || '').toLowerCase();
+const computeConsistencyScore = ({ traitVectorOutput = {} } = {}) => {
+  const responses = Array.isArray(traitVectorOutput.responseSignals)
+    ? traitVectorOutput.responseSignals
+    : [];
 
-  if (type === 'scale') {
-    const raw = Number(answer?.value);
-    const min = Number(question?.scaleMin || answer?.metadata?.scaleMin || 1);
-    const max = Number(question?.scaleMax || answer?.metadata?.scaleMax || 10);
-
-    if (Number.isFinite(raw) && Number.isFinite(min) && Number.isFinite(max) && max > min) {
-      return clamp(((raw - min) / (max - min)) * 4 + 1, 1, 5);
-    }
-
-    return 3;
-  }
-
-  if (typeof answer?.value === 'number') {
-    return clamp(answer.value, 1, 5);
-  }
-
-  if (answer?.value && typeof answer.value === 'object') {
-    const candidate = Number(
-      answer.value.normalizedScore ?? answer.metadata?.normalizedScore ?? answer.value.score
-    );
-    return Number.isFinite(candidate) ? clamp(candidate, 1, 5) : 3;
-  }
-
-  return clamp(Number(answer?.metadata?.normalizedScore || 3), 1, 5);
-};
-
-const averageScoreByIntent = ({ answers = [], questionPlan = [], intents = [] }) => {
-  const byQuestionId = new Map((Array.isArray(questionPlan) ? questionPlan : []).map((q) => [q.questionId, q]));
-  const targetIntents = new Set(
-    (Array.isArray(intents) ? intents : []).map((intent) => String(intent || '').toLowerCase())
-  );
-
-  const matched = (Array.isArray(answers) ? answers : []).filter((answer) => {
-    const question = byQuestionId.get(answer.questionId);
-    const intent = String(question?.intent || answer?.metadata?.intent || '').toLowerCase();
-    if (targetIntents.has(intent)) {
-      return true;
-    }
-
-    return Array.from(targetIntents).some((token) => intent.includes(token));
-  });
-
-  if (!matched.length) {
-    return 3;
-  }
-
-  const average =
-    matched.reduce((sum, answer) => {
-      const question = byQuestionId.get(answer.questionId);
-      return sum + toAnswerFivePoint({ answer, question });
-    }, 0) / matched.length;
-
-  return Number(average.toFixed(4));
-};
-
-const computeConsistencyScore = ({
-  personalityProfile = {},
-  behaviorAnalysis = {},
-  behaviorVector = {},
-  answers = [],
-  questionPlan = [],
-}) => {
-  const traits = personalityProfile.trait_scores || {};
-  const values = Object.values(traits).map((value) => Number(value || 0));
-
-  if (values.length === 0) {
+  if (!responses.length) {
     return {
       score: 0.5,
       contradictions: [],
     };
   }
 
-  const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
-  const variance = values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / values.length;
-  const normalizedVariance = clamp(variance / 1000, 0, 1);
+  const normalizedScores = responses.map((entry) => Number(entry?.normalized_score || 3));
+  const mean = normalizedScores.reduce((sum, value) => sum + value, 0) / normalizedScores.length;
+  const variance =
+    normalizedScores.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
+    Math.max(normalizedScores.length, 1);
 
-  const behavioralStability = String(behaviorAnalysis.emotional_stability || '').toLowerCase();
-  const stabilityBoost = behavioralStability.includes('stable') ? 0.08 : 0;
-  const stabilityPenalty = behavioralStability.includes('reactive') ? 0.08 : 0;
-
-  const stressSignal = Number(behaviorVector.stress_tolerance || 50);
-  const stressBoost = (stressSignal - 50) / 700;
-
-  const teamworkScore = averageScoreByIntent({
-    answers,
-    questionPlan,
-    intents: ['teamwork', 'conflict'],
-  });
-  const soloScore = averageScoreByIntent({
-    answers,
-    questionPlan,
-    intents: ['independence', 'structure'],
-  });
-  const riskScore = averageScoreByIntent({
-    answers,
-    questionPlan,
-    intents: ['risk'],
-  });
-  const deadlineScore = averageScoreByIntent({
-    answers,
-    questionPlan,
-    intents: ['deadline'],
-  });
+  const responseConfidence = clamp(Number(traitVectorOutput.responseConfidence || 0.55), 0, 1);
+  const variancePenalty = clamp(variance / 2.6, 0, 1);
 
   const contradictions = [];
-
-  if (teamworkScore >= 3.8 && soloScore >= 3.8) {
-    contradictions.push('High teamwork and high solo-work preference were both strongly selected.');
+  if (variance >= 1.8) {
+    contradictions.push('Answer variance is elevated across similar psychometric intents.');
+  }
+  if (responseConfidence < 0.45) {
+    contradictions.push('Low response confidence in text/scenario answers reduced stability.');
   }
 
-  if (riskScore >= 3.8 && deadlineScore <= 2.2) {
-    contradictions.push('Risk-seeking responses were paired with low deadline-pressure tolerance.');
-  }
-
-  const contradictionPenalty = contradictions.length * 0.12;
-  const score = clamp(
-    0.72 - normalizedVariance + stabilityBoost - stabilityPenalty + stressBoost - contradictionPenalty,
-    0,
-    1
-  );
+  const score = clamp(responseConfidence * 0.7 + (1 - variancePenalty) * 0.3, 0, 1);
 
   return {
     score: Number(score.toFixed(4)),
@@ -309,55 +120,14 @@ const computeConsistencyScore = ({
   };
 };
 
-const computeTopCareerConfidence = ({
-  recommendations = [],
-  consistencyScore = 1,
-  traitScores = {},
-  answeredQuestions = 0,
-  targetQuestions = 22,
-}) => {
-  const list = Array.isArray(recommendations) ? recommendations : [];
+const computeTraitVarianceFactor = (traitScores = {}) => {
+  const values = TRAITS.map((trait) => Number(traitScores[trait] || 50));
+  const mean = values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
+  const variance =
+    values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(values.length, 1);
+  const stdDev = Math.sqrt(variance);
 
-  if (list.length === 0) {
-    return {
-      confidenceGap: 0,
-      confidenceBand: 'low',
-      confidenceScore: 0,
-      confidence: 0,
-    };
-  }
-
-  const top1 = Number(list[0]?.score || 0);
-  const top2 = Number(list[1]?.score || 0);
-  const careerGap = clamp(round(top1 - top2), 0, 100);
-
-  const traitValues = ['O', 'C', 'E', 'A', 'N'].map((key) => Number(traitScores[key] || 50));
-  const traitMean = traitValues.reduce((sum, value) => sum + value, 0) / traitValues.length;
-  const traitVariance =
-    traitValues.reduce((sum, value) => sum + (value - traitMean) ** 2, 0) / traitValues.length;
-  const traitStd = Math.sqrt(traitVariance);
-  const traitVarianceFactor = (1 - clamp(traitStd / 35, 0, 1)) * 100;
-
-  const consistencyFactor = clamp(Number(consistencyScore || 0), 0, 1) * 100;
-  const questionCountFactor =
-    clamp(Number(answeredQuestions || 0) / Math.max(Number(targetQuestions || 22), 1), 0, 1) * 100;
-
-  const normalizedScore =
-    consistencyFactor * 0.4 +
-    traitVarianceFactor * 0.2 +
-    careerGap * 0.25 +
-    questionCountFactor * 0.15;
-
-  const confidenceScore = clamp(round(normalizedScore), 0, 100);
-  const confidence = Number((confidenceScore / 100).toFixed(4));
-  const confidenceBand = confidenceScore < 45 ? 'low' : confidenceScore <= 70 ? 'medium' : 'high';
-
-  return {
-    confidenceGap: careerGap,
-    confidenceBand,
-    confidenceScore,
-    confidence,
-  };
+  return Number(clamp(stdDev / 24, 0, 1).toFixed(4));
 };
 
 const buildCareerContrast = (recommendations = []) => {
@@ -372,9 +142,8 @@ const buildCareerContrast = (recommendations = []) => {
   const dimensions = [
     { key: 'personality_score', label: 'personality alignment' },
     { key: 'cognitive_match', label: 'cognitive match' },
-    { key: 'behavior_match', label: 'behavior signal' },
-    { key: 'aptitude_match', label: 'analytical aptitude' },
-    { key: 'skill_alignment', label: 'skills fit' },
+    { key: 'behavior_match', label: 'behavior alignment' },
+    { key: 'skill_alignment', label: 'skill overlap' },
   ];
 
   const rankedReasons = dimensions
@@ -386,128 +155,19 @@ const buildCareerContrast = (recommendations = []) => {
     .sort((a, b) => b.delta - a.delta)
     .slice(0, 3);
 
-  const reasons = rankedReasons.map(
-    (item) => `${item.label} is ${Math.round(item.delta)} points stronger for ${top1.career}`
-  );
-  const summary =
-    rankedReasons.length > 0
-      ? `${top1.career} is stronger than ${top2.career} due to higher ${rankedReasons
-          .map((item) => item.label)
-          .join(', ')}.`
-      : `${top1.career} outranks ${top2.career} through a stronger overall composite score.`;
-
   return {
     primaryCareer: top1.career,
     secondaryCareer: top2.career,
-    summary,
-    reasons,
+    summary:
+      rankedReasons.length > 0
+        ? `${top1.career} ranks above ${top2.career} due to stronger ${rankedReasons
+            .map((item) => item.label)
+            .join(', ')}.`
+        : `${top1.career} ranks above ${top2.career} on overall profile alignment.`,
+    reasons: rankedReasons.map(
+      (item) => `${item.label} is ${Math.round(item.delta)} points stronger for ${top1.career}`
+    ),
   };
-};
-
-const toTopEntries = (source = {}, count = 2) =>
-  Object.entries(source || {})
-    .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
-    .slice(0, count);
-
-const buildNarrativeFallback = ({
-  personalityProfile = {},
-  cognitiveScores = {},
-  behaviorVector = {},
-  recommendations = [],
-  consistencyScore = 0.5,
-  cvData = {},
-}) => {
-  const interpretationSummary = String(personalityProfile?.interpretation?.summary || '').trim();
-  const topCareer = recommendations?.[0]?.career || 'your top matched path';
-
-  const topTraits = toTopEntries(personalityProfile?.trait_scores || {}, 2)
-    .map(([trait, score]) => `${trait} ${round(score)}%`)
-    .join(', ');
-
-  const topCognitive = toTopEntries(cognitiveScores, 2)
-    .map(([key, score]) => `${key.replace(/_/g, ' ')} ${round(score)}%`)
-    .join(', ');
-
-  const topBehavior = toTopEntries(behaviorVector, 2)
-    .map(([key, score]) => `${key.replace(/_/g, ' ')} ${round(score)}%`)
-    .join(', ');
-
-  const topSkills = (Array.isArray(cvData.skills) ? cvData.skills : [])
-    .map((item) => String(item?.name || item || '').trim())
-    .filter(Boolean)
-    .slice(0, 3)
-    .join(', ');
-
-  return `Your profile is led by ${topTraits || 'balanced traits'}, with strongest cognition in ${
-    topCognitive || 'analytical and strategic processing'
-  } and behavior signals in ${topBehavior || 'steady execution'}. ${
-    interpretationSummary || 'This pattern suggests reliable performance in complex environments.'
-  } Core skills${topSkills ? ` (${topSkills})` : ''} support ${topCareer} as the strongest direction, with current profile consistency at ${round(
-    Number(consistencyScore || 0) * 100
-  )}%.`;
-};
-
-const generateNarrativeSummary = async ({
-  personalityProfile = {},
-  cognitiveScores = {},
-  behaviorVector = {},
-  recommendations = [],
-  consistencyScore = 0.5,
-  cvData = {},
-}) => {
-  const fallback = buildNarrativeFallback({
-    personalityProfile,
-    cognitiveScores,
-    behaviorVector,
-    recommendations,
-    consistencyScore,
-    cvData,
-  });
-
-  if (!config.openaiApiKey) {
-    return fallback;
-  }
-
-  const topTraitEntries = toTopEntries(personalityProfile?.trait_scores || {}, 3);
-  const topCognitiveEntries = toTopEntries(cognitiveScores, 3);
-  const topBehaviorEntries = toTopEntries(behaviorVector, 3);
-  const topSkills = (Array.isArray(cvData.skills) ? cvData.skills : [])
-    .map((entry) => String(entry?.name || entry || '').trim())
-    .filter(Boolean)
-    .slice(0, 5);
-
-  try {
-    const response = await getOpenAiClient().responses.create({
-      model: config.openaiModel,
-      temperature: 0.2,
-      max_output_tokens: 260,
-      input: [
-        {
-          role: 'system',
-          content:
-            'Write one concise paragraph grounded in explicit profile signals. Mention top traits, top cognitive signals, top behavior signals, and top skills. Avoid generic advice.',
-        },
-        {
-          role: 'user',
-          content: `Generate one paragraph (80-140 words) with concrete metrics.\n\nArchetype: ${
-            personalityProfile?.personality_type || 'Adaptive Generalist'
-          }\nTop traits: ${JSON.stringify(topTraitEntries)}\nTop cognitive: ${JSON.stringify(
-            topCognitiveEntries
-          )}\nTop behavior: ${JSON.stringify(topBehaviorEntries)}\nTop skills: ${JSON.stringify(
-            topSkills
-          )}\nTop careers: ${(recommendations || [])
-            .slice(0, 3)
-            .map((item) => item?.career)
-            .join(', ')}\nConsistency score: ${round(Number(consistencyScore || 0) * 100)}%`,
-        },
-      ],
-    });
-
-    const text = String(extractOutputText(response) || '').replace(/\s+/g, ' ').trim();
-    return text || fallback;
-  } catch (error) {
-    return fallback;
-  }
 };
 
 const persistAssessmentResult = async ({
@@ -518,37 +178,17 @@ const persistAssessmentResult = async ({
   cognitiveScores,
   personalityProfile,
   careerOutput,
-  narrativeSummary,
+  narrativeOutput,
   careerContrast,
+  confidenceOutput,
+  consistencyOutput,
+  heatmapOutput,
+  aiProfile,
 }) => {
   const now = new Date();
   const normalizedCv = normalizeCvData(session.cvData || {});
   const traitScores = personalityProfile.trait_scores || {};
   const dominantTrait = getDominantTrait(traitScores);
-
-  const consistencyOutput = computeConsistencyScore({
-    personalityProfile,
-    behaviorAnalysis,
-    behaviorVector,
-    answers: unifiedAnswers,
-    questionPlan: session.questionPlan || [],
-  });
-  const consistencyScore = consistencyOutput.score;
-
-  const confidenceOutput = computeTopCareerConfidence({
-    recommendations: careerOutput.recommendations || [],
-    consistencyScore,
-    traitScores,
-    answeredQuestions: unifiedAnswers.filter((answer) => answer.type !== 'behavior').length,
-    targetQuestions: session.questionPlan?.length || 22,
-  });
-
-  const heatmapOutput = buildInsightHeatmap({
-    traitScores,
-    cognitiveScores,
-    behaviorVector,
-  });
-
   const stopConfidence = Number(session?.adaptiveMetrics?.questionnaireConfidence || 0);
 
   const resultPayload = {
@@ -575,19 +215,21 @@ const persistAssessmentResult = async ({
       oceanNormalized: personalityProfile.ocean_normalized || {},
       oceanCounts: personalityProfile.ocean_counts || {},
       archetypes: {
-        personalityType: personalityProfile.personality_type || 'Adaptive Generalist',
+        personalityType: personalityProfile.personality_type || 'Trait-Led Profile',
         dominantTrait,
         hybridTraitScores: personalityProfile.hybrid_trait_scores || {},
-        dominantStrengths: personalityProfile.dominant_strengths || [],
-        weaknesses: personalityProfile.weaknesses || [],
+        dominantStrengths:
+          narrativeOutput?.strengths || personalityProfile.dominant_strengths || [],
+        weaknesses:
+          narrativeOutput?.weaknesses || personalityProfile.weaknesses || [],
         interpretation: personalityProfile.interpretation || {},
         introversionScore: Number(personalityProfile.introversion_score || 0),
         behavioralSummary: personalityProfile.behavioral_summary || '',
       },
       vectors: personalityProfile.vectors || {},
-      consistencyScore,
+      consistencyScore: consistencyOutput.score,
       consistencySignals: consistencyOutput.contradictions || [],
-      narrativeSummary: narrativeSummary || '',
+      narrativeSummary: narrativeOutput?.summary || '',
     },
     career: {
       recommendations: careerOutput.recommendations || [],
@@ -609,16 +251,32 @@ const persistAssessmentResult = async ({
       facetDefinitions: heatmapOutput.facetDefinitions,
       confidence: confidenceOutput.confidence,
       confidenceScore: confidenceOutput.confidenceScore,
-      confidenceGap: confidenceOutput.confidenceGap,
+      confidenceGap: clamp(
+        Number(careerOutput?.recommendations?.[0]?.score || 0) -
+          Number(careerOutput?.recommendations?.[1]?.score || 0),
+        0,
+        100
+      ),
       confidenceBand: confidenceOutput.confidenceBand,
       stopConfidence: clamp(stopConfidence, 0, 1),
       balance: {
-        personalityWeight: Math.round(Number(careerOutput?.balance?.weights?.personality || 0.3) * 100),
-        careerWeight:
-          100 - Math.round(Number(careerOutput?.balance?.weights?.personality || 0.3) * 100),
+        personalityWeight: 50,
+        careerWeight: 50,
         personalityScore: Number(careerOutput?.balance?.personalityScore || 0),
         careerScore: Number(careerOutput?.balance?.careerScore || 0),
         componentWeights: careerOutput?.balance?.weights || {},
+      },
+      aiReport: {
+        summary: narrativeOutput?.summary || '',
+        strengths: narrativeOutput?.strengths || [],
+        weaknesses: narrativeOutput?.weaknesses || [],
+        communicationStyle: behaviorAnalysis?.decision_style || '',
+        workStyle: (Array.isArray(aiProfile?.work_style) ? aiProfile.work_style : []).join(', '),
+        growthSuggestions: narrativeOutput?.growth_path || [],
+        careerRecommendations: (careerOutput?.recommendations || []).slice(0, 3),
+        model: 'adaptive-ai-pipeline',
+        promptVersion: 'phase-7.8',
+        generatedAt: now,
       },
     },
     schemaVersion: normalizeResultSchemaVersion(),
@@ -646,6 +304,13 @@ const persistAssessmentResult = async ({
 const generateAssessmentResult = async ({ session }) => {
   const unifiedAnswers = getSessionUnifiedAnswers(session);
 
+  const aiProfile = await extractAiCvIntelligence({
+    cvData: session.cvData || {},
+    cvRawText: session.cvRawText || '',
+    existingProfile: session.aiProfile,
+  });
+  session.aiProfile = aiProfile;
+
   const behaviorAnswers = toLegacyBehaviorAnswers({
     answers: unifiedAnswers,
     behaviorPrompts: session.behaviorPrompts || [],
@@ -655,56 +320,73 @@ const generateAssessmentResult = async ({ session }) => {
   const behaviorAnalysis = await analyzeBehavior({
     answers: behaviorAnswers,
     cvData: session.cvData || {},
-    profileVector: session.profileVector || {},
+    profileVector: {
+      ...(session.profileVector || {}),
+      aiProfile,
+    },
   });
 
-  const cognitiveScores = computeCognitiveScores({
+  const traitVectorOutput = await buildTraitVector({
     answers: unifiedAnswers,
     questionPlan: session.questionPlan || [],
-    profileVector: session.profileVector || {},
+    aiProfile,
   });
 
-  const behaviorVector = toBehaviorVector({
-    answers: unifiedAnswers,
-    questionPlan: session.questionPlan || [],
-    behaviorAnalysis,
+  const cognitiveScores = traitVectorOutput.cognitiveVector || {};
+  const behaviorVector = toLegacyBehaviorVector({
+    behavior: traitVectorOutput.behaviorVector || {},
+    traits: traitVectorOutput.oceanVector || {},
   });
 
   const personalityProfile = evaluatePersonalityProfile({
     cvData: session.cvData || {},
-    profileVector: session.profileVector || {},
-    questionPlan: session.questionPlan || [],
-    answers: unifiedAnswers,
-    behaviorAnalysis,
+    profileVector: {
+      ...(session.profileVector || {}),
+      aiProfile,
+    },
+    traitVectorOutput,
     cognitiveScores,
     behaviorVector,
   });
 
-  const careerOutput = recommendCareers({
+  const careerOutput = await recommendCareers({
     cvData: session.cvData || {},
+    aiProfile,
     personalityProfile,
     profileVector: session.profileVector || {},
-    answers: unifiedAnswers,
-    questionPlan: session.questionPlan || [],
+    traitVectorOutput,
     cognitiveScores,
     behaviorVector,
   });
 
   const careerContrast = buildCareerContrast(careerOutput.recommendations || []);
-  const consistencyPreview = computeConsistencyScore({
-    personalityProfile,
-    behaviorAnalysis,
-    behaviorVector,
-    answers: unifiedAnswers,
-    questionPlan: session.questionPlan || [],
+
+  const narrativeOutput = await generateResultNarrative({
+    aiProfile,
+    traitVector: personalityProfile.trait_scores || {},
+    careers: careerOutput.recommendations || [],
+    skills: aiProfile.skills || [],
+    cognitiveVector: traitVectorOutput.cognitiveVector || {},
+    behaviorVector: traitVectorOutput.behaviorVector || {},
   });
-  const narrativeSummary = await generateNarrativeSummary({
-    personalityProfile,
-    cognitiveScores,
-    behaviorVector,
-    recommendations: careerOutput.recommendations || [],
-    consistencyScore: consistencyPreview.score,
-    cvData: session.cvData || {},
+
+  const consistencyOutput = computeConsistencyScore({ traitVectorOutput });
+  const traitVarianceFactor = computeTraitVarianceFactor(personalityProfile.trait_scores || {});
+  const top1 = Number(careerOutput?.recommendations?.[0]?.score || 0);
+  const top2 = Number(careerOutput?.recommendations?.[1]?.score || 0);
+
+  const confidenceOutput = computeConfidenceScore({
+    consistency: consistencyOutput.score,
+    trait_variance: traitVarianceFactor,
+    coverage: Number(traitVectorOutput.coverage || 0),
+    career_gap: clamp((top1 - top2) / 100, 0, 1),
+    cv_strength: clamp(Number(aiProfile.confidence || 0.5), 0, 1),
+    response_confidence: clamp(Number(traitVectorOutput.responseConfidence || 0.55), 0, 1),
+  });
+
+  const heatmapOutput = buildInsightHeatmap({
+    traitScores: personalityProfile.trait_scores || {},
+    facetVector: traitVectorOutput.facetVector || {},
   });
 
   const resultDocument = await persistAssessmentResult({
@@ -715,18 +397,24 @@ const generateAssessmentResult = async ({ session }) => {
     cognitiveScores,
     personalityProfile,
     careerOutput,
-    narrativeSummary,
+    narrativeOutput,
     careerContrast,
+    confidenceOutput,
+    consistencyOutput,
+    heatmapOutput,
+    aiProfile,
   });
 
   const resultObject = resultDocument.toObject();
 
   return {
+    aiProfile,
     behaviorAnalysis,
     behaviorVector,
     cognitiveScores,
     personalityProfile,
     careerOutput,
+    traitVectorOutput,
     resultDocument,
     resultSummary: mapResultToLegacySummary(resultObject),
   };

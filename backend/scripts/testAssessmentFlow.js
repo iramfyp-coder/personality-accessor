@@ -43,10 +43,7 @@ const run = async () => {
   const planOutput = await generateQuestionPlan({ cvData: parsedCv });
   Question.find = originalFind;
 
-  assert(
-    planOutput.questionPlan.length >= 10 && planOutput.questionPlan.length <= 12,
-    'Question count should be between 10 and 12'
-  );
+  assert.equal(planOutput.questionPlan.length, 22, 'Question count should be 22');
 
   const sessionLike = {
     currentQuestionIndex: 0,
@@ -79,6 +76,25 @@ const run = async () => {
   const personalityA = evaluatePersonalityProfile({
     cvData: parsedCv,
     profileVector,
+    traitVectorOutput: {
+      oceanVector: { O: 62, C: 70, E: 56, A: 58, N: 42 },
+      cognitiveVector: {
+        analytical: 66,
+        creative: 61,
+        strategic: 64,
+        systematic: 68,
+        practical: 60,
+        abstract: 58,
+      },
+      behaviorVector: {
+        leadership: 57,
+        analysis: 65,
+        creativity: 61,
+        risk: 54,
+        collaboration: 59,
+        execution: 67,
+      },
+    },
     questionPlan: planOutput.questionPlan,
     answers,
     behaviorAnalysis,
@@ -87,6 +103,25 @@ const run = async () => {
   const personalityB = evaluatePersonalityProfile({
     cvData: parsedCv,
     profileVector,
+    traitVectorOutput: {
+      oceanVector: { O: 62, C: 70, E: 56, A: 58, N: 42 },
+      cognitiveVector: {
+        analytical: 66,
+        creative: 61,
+        strategic: 64,
+        systematic: 68,
+        practical: 60,
+        abstract: 58,
+      },
+      behaviorVector: {
+        leadership: 57,
+        analysis: 65,
+        creativity: 61,
+        risk: 54,
+        collaboration: 59,
+        execution: 67,
+      },
+    },
     questionPlan: planOutput.questionPlan,
     answers,
     behaviorAnalysis,
@@ -98,8 +133,9 @@ const run = async () => {
     'Personality trait scores should be deterministic for same inputs'
   );
 
-  const careerOutput = recommendCareers({
+  const careerOutput = await recommendCareers({
     cvData: parsedCv,
+    aiProfile: planOutput.aiProfile || {},
     personalityProfile: personalityA,
     profileVector,
   });

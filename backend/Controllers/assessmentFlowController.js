@@ -27,7 +27,7 @@ const { generateCareerChatReply } = require('../services/assessment/career-chatb
 const { explainWhyNotCareer } = require('../services/assessment/career-recommendation.service');
 const { generateAssessmentPdfBuffer } = require('../services/assessment/pdf-report.service');
 const { streamProgress } = require('../services/assessment/progress-stream.service');
-const { analyzeTextAnswer } = require('../services/assessment/text-answer-analysis.service');
+const { interpretTextAnswer } = require('../services/response-parser.service');
 const {
   ensureJsonObjectPayload,
   extractSubmittedSessionId,
@@ -534,11 +534,16 @@ const normalizeQuestionAnswer = async ({ body, question, profileVector }) => {
         expectsExample: Boolean(question.expectsExample),
       });
 
-      const analysis = await analyzeTextAnswer({
-        answerText: text,
-        exampleText: example,
+      const analysis = await interpretTextAnswer({
+        answerText: `${text}\n${example}`.trim(),
         question,
-        profileVector,
+        aiProfile:
+          profileVector?.aiProfile ||
+          {
+            domain: profileVector?.domainCategory || '',
+            skills: profileVector?.skillHighlights || [],
+            interests: profileVector?.interests || [],
+          },
       });
 
       const normalizedScore = normalizeRangeValue({
@@ -602,11 +607,16 @@ const normalizeQuestionAnswer = async ({ body, question, profileVector }) => {
       expectsExample: Boolean(question.expectsExample),
     });
 
-    const analysis = await analyzeTextAnswer({
-      answerText: text,
-      exampleText: example,
+    const analysis = await interpretTextAnswer({
+      answerText: `${text}\n${example}`.trim(),
       question,
-      profileVector,
+      aiProfile:
+        profileVector?.aiProfile ||
+        {
+          domain: profileVector?.domainCategory || '',
+          skills: profileVector?.skillHighlights || [],
+          interests: profileVector?.interests || [],
+        },
     });
 
     const normalizedScore = normalizeRangeValue({
@@ -716,6 +726,7 @@ const uploadCv = async (req, res, next) => {
     }
     session.cvRawText = analysis.rawText;
     session.cvData = normalizeCvData(analysis.parsed);
+    session.aiProfile = undefined;
     session.profileVector = undefined;
     session.smartIntro = undefined;
     session.questionPlan = [];
@@ -805,6 +816,7 @@ const startAdaptiveAssessment = async (req, res, next) => {
         profile: profileToUse,
         userRole: roleToUse,
       });
+      session.aiProfile = undefined;
       session.lastActiveAt = new Date();
     }
 
@@ -825,7 +837,9 @@ const startAdaptiveAssessment = async (req, res, next) => {
 
     const questionOutput = await generateQuestionPlan({
       cvData: session.cvData,
+      cvRawText: session.cvRawText || '',
       askedQuestions: user?.askedQuestions || [],
+      aiProfile: session.aiProfile || undefined,
     });
 
     if (user) {
@@ -867,6 +881,7 @@ const startAdaptiveAssessment = async (req, res, next) => {
     }
 
     session.profileVector = questionOutput.profileVector;
+    session.aiProfile = questionOutput.aiProfile || undefined;
     session.smartIntro = questionOutput.smartIntro;
     session.questionPlan = questionOutput.questionPlan;
     session.questionPoolBackup = questionOutput.questionPoolBackup;
@@ -1165,7 +1180,7 @@ const answerAdaptiveQuestion = async (req, res, next) => {
         const cachedSupplemental = Array.isArray(
           session.adaptiveMetrics?.prefetchedSupplementalQuestionPlan
         )
-          ? session.adaptiveMetrics.prefetchedSupplementalQuestionPlan
+              ? session.adaptiveMetrics.prefetchedSupplementalQuestionPlan
               .slice(0, extensionSignal.extraQuestions)
               .filter(Boolean)
           : [];
@@ -1175,9 +1190,11 @@ const answerAdaptiveQuestion = async (req, res, next) => {
             ? cachedSupplemental
             : await generateSupplementalQuestionPlan({
                 cvData: session.cvData || {},
+                cvRawText: session.cvRawText || '',
                 askedQuestions: session.askedQuestions || [],
                 existingQuestionPlan: session.questionPlan || [],
                 additionalCount: extensionSignal.extraQuestions,
+                aiProfile: session.aiProfile || undefined,
               });
 
         if (supplemental.length > 0) {

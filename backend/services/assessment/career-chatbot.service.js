@@ -2,6 +2,8 @@ const { config } = require('../../config/env');
 const { extractOutputText } = require('./aiJson');
 const { getOpenAiClient } = require('./openaiClient');
 
+const toText = (value) => String(value || '').trim();
+
 const toCareerList = (result, session) => {
   if (Array.isArray(result?.career?.recommendations)) {
     return result.career.recommendations;
@@ -24,119 +26,82 @@ const toProfileContext = ({ session, result }) => {
   const cv = result?.cvData || session?.cvData || {};
   const personality = result?.personality || {};
   const behavior = result?.behavior || {};
+  const aiProfile =
+    session?.aiProfile && typeof session.aiProfile === 'object' ? session.aiProfile : {};
 
   const skills = (Array.isArray(cv.skills) ? cv.skills : [])
-    .map((entry) => String(entry?.name || entry || '').trim())
+    .map((entry) => toText(entry?.name || entry))
+    .filter(Boolean)
+    .slice(0, 12);
+
+  const interests = (Array.isArray(cv.interests) ? cv.interests : [])
+    .map((entry) => toText(entry))
     .filter(Boolean)
     .slice(0, 10);
 
-  const interests = (Array.isArray(cv.interests) ? cv.interests : [])
-    .map((entry) => String(entry || '').trim())
-    .filter(Boolean)
-    .slice(0, 8);
-
-  const careerRecommendations = toCareerList(result, session).slice(0, 8).map((item) => ({
+  const careers = toCareerList(result, session).slice(0, 8).map((item) => ({
     career: item.career,
     score: Number(item.score || 0),
-    skill_alignment: Number(item.skill_alignment || 0),
-    subject_match: Number(item.subject_match || 0),
-    cognitive_match: Number(item.cognitive_match || 0),
-    behavior_match: Number(item.behavior_match || 0),
-    why_fit: item.why_fit || '',
+    confidence: Number(item.confidence || 0),
+    reason: toText(item.reason || item.why_fit),
     skill_gaps: Array.isArray(item.skill_gaps) ? item.skill_gaps : [],
+    growth_suggestions: Array.isArray(item.growth_suggestions)
+      ? item.growth_suggestions
+      : [],
   }));
 
+  const topSkillGaps = Array.from(
+    new Set(
+      careers
+        .flatMap((item) => (Array.isArray(item.skill_gaps) ? item.skill_gaps : []))
+        .map((item) => toText(item))
+        .filter(Boolean)
+    )
+  ).slice(0, 10);
+
   return {
-    archetype:
-      personality?.archetypes?.personalityType ||
-      personality?.archetypes?.interpretation?.label ||
-      personality?.personality_type ||
-      'Unknown',
-    personalityVector: personality?.traits || personality?.trait_scores || {},
+    aiProfile,
+    domain: toText(aiProfile.domain || cv.source_domain || 'general'),
+    personalityTraits: personality?.traits || {},
     cognitiveVector: personality?.cognitiveScores || {},
     behaviorVector: behavior?.vector || {},
-    topTraits: toTopEntries(personality?.traits || personality?.trait_scores || {}, 3),
+    topTraits: toTopEntries(personality?.traits || {}, 3),
     topCognitive: toTopEntries(personality?.cognitiveScores || {}, 3),
     topBehavior: toTopEntries(behavior?.vector || {}, 3),
     skills,
     interests,
-    careers: careerRecommendations,
+    careers,
+    topSkillGaps,
   };
 };
 
-const careerFromMessage = (message = '', recommendations = []) => {
-  const lower = String(message || '').toLowerCase();
-  const list = Array.isArray(recommendations) ? recommendations : [];
-
-  const direct = list.find((item) => lower.includes(String(item.career || '').toLowerCase()));
-  if (direct) {
-    return direct;
-  }
-
-  const aliases = {
-    'power systems': ['power systems engineer', 'electrical engineer'],
-    electrical: ['electrical engineer', 'power systems engineer'],
-    control: ['control systems engineer', 'automation engineer'],
-    automation: ['automation engineer', 'control systems engineer'],
-    embedded: ['embedded engineer'],
-    backend: ['backend engineer', 'software engineer'],
-    frontend: ['frontend engineer', 'ux designer'],
-    business: ['business analyst', 'product manager'],
-  };
-
-  const mapped = Object.entries(aliases).find(([token]) => lower.includes(token));
-  if (!mapped) {
-    return null;
-  }
-
-  const candidates = mapped[1];
-  return (
-    list.find((item) => candidates.some((candidate) => String(item.career || '').toLowerCase() === candidate)) ||
-    null
-  );
-};
-
-const buildSpecificFallback = ({ context, message }) => {
-  const recommendations = context.careers || [];
-  const topCareer = recommendations[0] || null;
-  const askedCareer = careerFromMessage(message, recommendations);
-
-  const topTraits = context.topTraits
+const buildFallback = ({ context, message }) => {
+  const topCareer = context.careers?.[0] || null;
+  const topTraits = (context.topTraits || [])
     .map((item) => `${item.key} ${Math.round(item.value)}%`)
     .join(', ');
-  const topCognitive = context.topCognitive
-    .map((item) => `${item.key.replace(/_/g, ' ')} ${Math.round(item.value)}%`)
-    .join(', ');
-  const topBehavior = context.topBehavior
-    .map((item) => `${item.key.replace(/_/g, ' ')} ${Math.round(item.value)}%`)
-    .join(', ');
 
-  if (askedCareer) {
-    const skillsLine = context.skills.slice(0, 4).join(', ');
-    const gaps = (askedCareer.skill_gaps || []).slice(0, 2).join(', ');
-
-    return `${askedCareer.career} currently matches your profile at ${Math.round(
-      askedCareer.score || 0
-    )}%. Core evidence: traits (${topTraits || 'balanced'}), cognition (${topCognitive || 'balanced'}), and behavior (${topBehavior || 'balanced'}). Your strongest CV signals are ${
-      skillsLine || 'general skills'
-    }.${gaps ? ` To improve fit further, close gaps in ${gaps}.` : ''}`;
-  }
+  const topGaps = (context.topSkillGaps || []).slice(0, 3).join(', ');
 
   if (topCareer) {
-    const shortlist = recommendations.slice(0, 3).map((item) => item.career).join(', ');
-    return `Based on your profile, the strongest direction is ${topCareer.career} (${Math.round(
-      topCareer.score || 0
-    )}%). Key signals are traits (${topTraits || 'balanced'}), cognitive strengths (${topCognitive || 'balanced'}), and behavior (${topBehavior || 'balanced'}). Current top career set is ${shortlist}.`;
+    return [
+      `Profile-grounded answer for: ${message}`,
+      `Top match: ${topCareer.career} (${Math.round(topCareer.score || 0)}%).`,
+      `Evidence: traits (${topTraits || 'balanced profile'}) and domain (${context.domain}).`,
+      topGaps ? `Primary skill gaps to close: ${topGaps}.` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
   }
 
-  return `Your strongest current profile signals are traits (${topTraits || 'balanced'}), cognition (${topCognitive || 'balanced'}), and behavior (${topBehavior || 'balanced'}). Ask about a specific role and I will evaluate fit against your profile vectors.`;
+  return `Using your profile context, I can answer with specific career fit logic. Ask about a target role, growth path, or skill-gap plan.`;
 };
 
 const generateCareerChatReply = async ({ session, result, message }) => {
   const context = toProfileContext({ session, result });
 
   if (!config.openaiApiKey) {
-    return buildSpecificFallback({ context, message });
+    return buildFallback({ context, message });
   }
 
   const recentHistory = (session.chatHistory || [])
@@ -148,30 +113,28 @@ const generateCareerChatReply = async ({ session, result, message }) => {
     const response = await getOpenAiClient().responses.create({
       model: config.openaiModel,
       temperature: 0.2,
-      max_output_tokens: 520,
+      max_output_tokens: 700,
       input: [
         {
           role: 'system',
           content:
-            'You are a profile-grounded career reasoning assistant. Based on this profile, answer the user specifically. Use provided vectors, skills, interests, and career scores. Never give generic advice. Include concrete percentages where relevant.',
+            'You are a profile-grounded career assistant. Always answer using provided profile evidence. Use sections and bullet points with clear reasoning. Avoid generic advice.',
         },
         {
           role: 'user',
-          content: `Profile context:\n${JSON.stringify(context, null, 2)}\n\nRecent chat:\n${
-            recentHistory || 'none'
-          }\n\nUser question:\n${message}\n\nInstruction: If user asks about a career, explain fit/mismatch using personality vector + cognitive vector + behavior vector + skills + top recommendations.`,
+          content: `Answer using this profile.\n\nUse:\n\nbullet points\nsections\nclear reasoning\n\nProfile context:\n${JSON.stringify(context, null, 2)}\n\nRecent chat:\n${recentHistory || 'none'}\n\nUser question:\n${message}\n\nOutput style:\n- Start with a short direct answer.\n- Then provide sections: Evidence, Career Fit, Skill Gaps, Next Actions.\n- Reference profile traits, skills, and ranked careers explicitly.`,
         },
       ],
     });
 
-    const text = String(extractOutputText(response) || '').replace(/\s+/g, ' ').trim();
+    const text = toText(extractOutputText(response));
     if (text) {
       return text;
     }
 
-    return buildSpecificFallback({ context, message });
+    return buildFallback({ context, message });
   } catch (error) {
-    return buildSpecificFallback({ context, message });
+    return buildFallback({ context, message });
   }
 };
 

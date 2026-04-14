@@ -375,6 +375,11 @@ const questionPlanItemSchema = new mongoose.Schema(
       ],
       required: true,
     },
+    rawAnswerType: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     category: {
       type: String,
       default: 'personality',
@@ -409,6 +414,11 @@ const questionPlanItemSchema = new mongoose.Schema(
     traitTarget: {
       type: String,
       default: 'O',
+      trim: true,
+    },
+    facet: {
+      type: String,
+      default: '',
       trim: true,
     },
     expectsExample: {
@@ -515,6 +525,22 @@ const questionPlanItemSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    cvRelevance: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 1,
+    },
+    reasoningWeight: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 1,
+    },
+    aiMeta: {
+      type: mongoose.Schema.Types.Mixed,
+      default: undefined,
+    },
   },
   { _id: false }
 );
@@ -559,6 +585,10 @@ const assessmentSessionSchema = new mongoose.Schema(
       type: String,
       default: '',
       trim: true,
+    },
+    aiProfile: {
+      type: mongoose.Schema.Types.Mixed,
+      default: undefined,
     },
     profileVector: {
       type: mongoose.Schema.Types.Mixed,
