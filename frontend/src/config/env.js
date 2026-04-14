@@ -1,19 +1,33 @@
 const trimTrailingSlash = (value) => (value.endsWith('/') ? value.slice(0, -1) : value);
 
-const readEnvValue = ({ viteKey, legacyKey }) => {
-  const viteValue = import.meta?.env?.[viteKey];
-  if (typeof viteValue === 'string' && viteValue.trim()) {
-    return viteValue;
+const readIfString = (value) =>
+  typeof value === 'string' && value.trim() ? value : '';
+
+const readFromImportMeta = (key) => {
+  if (!key) {
+    return '';
   }
 
-  const legacyValue =
-    typeof process !== 'undefined' && process?.env ? process.env[legacyKey] : '';
-  if (typeof legacyValue === 'string' && legacyValue.trim()) {
-    return legacyValue;
-  }
-
-  return '';
+  return readIfString(import.meta?.env?.[key]);
 };
+
+const readFromProcessEnv = (key) => {
+  if (!key) {
+    return '';
+  }
+
+  if (typeof process === 'undefined' || !process?.env) {
+    return '';
+  }
+
+  return readIfString(process.env[key]);
+};
+
+const readEnvValue = ({ viteKey, legacyKey }) =>
+  readFromImportMeta(viteKey) ||
+  readFromImportMeta(legacyKey) ||
+  readFromProcessEnv(viteKey) ||
+  readFromProcessEnv(legacyKey);
 
 const normalizeBaseUrl = (value) => {
   if (!value) {
