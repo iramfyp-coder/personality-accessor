@@ -16,6 +16,7 @@ import {
 } from 'react-icons/fi';
 import { gsap } from 'gsap';
 import { selectImage } from '../../services/questionImageEngine';
+import tokens from '../../theme/tokens';
 
 const PROFESSIONAL_FALLBACK_IMAGE =
   '/assessment-images/professional-workplace/professional-workplace-01.webp';
@@ -23,31 +24,31 @@ const PROFESSIONAL_FALLBACK_IMAGE =
 const VISUAL_MAP = {
   technical: {
     icon: FiCode,
-    accent: '#38BDF8',
-    softAccent: 'rgba(56, 189, 248, 0.24)',
+    accent: tokens.accent.blueGlow,
+    softAccent: 'rgba(96, 165, 250, 0.24)',
     icons: [FiCode, FiCpu, FiGrid, FiLayers],
   },
   business: {
     icon: FiBarChart2,
-    accent: '#22D3EE',
+    accent: tokens.accent.cyan,
     softAccent: 'rgba(34, 211, 238, 0.24)',
     icons: [FiBarChart2, FiBriefcase, FiCompass, FiFlag],
   },
   creative: {
     icon: FiFeather,
-    accent: '#A78BFA',
-    softAccent: 'rgba(167, 139, 250, 0.24)',
+    accent: tokens.accent.purple,
+    softAccent: 'rgba(139, 92, 246, 0.24)',
     icons: [FiFeather, FiCompass, FiLayers, FiActivity],
   },
   leadership: {
     icon: FiUsers,
-    accent: '#34D399',
+    accent: tokens.state.success,
     softAccent: 'rgba(52, 211, 153, 0.24)',
     icons: [FiUsers, FiFlag, FiActivity, FiBriefcase],
   },
   general: {
     icon: FiActivity,
-    accent: '#60A5FA',
+    accent: tokens.accent.blue,
     softAccent: 'rgba(96, 165, 250, 0.24)',
     icons: [FiActivity, FiCompass, FiLayers, FiGrid],
   },
@@ -76,7 +77,7 @@ const inferVisualKey = (question = {}) => {
   return 'general';
 };
 
-const MiniOrb = ({ color = '#38BDF8' }) => {
+const MiniOrb = ({ color = tokens.accent.blueGlow }) => {
   const orbRef = useRef(null);
 
   useFrame(({ clock }) => {

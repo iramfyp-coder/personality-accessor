@@ -26,6 +26,7 @@ import TraitSphere from '../../components/3d/TraitSphere';
 import mapTraitsTo3DData from '../../utils/traitMapper';
 import { normalizeTraits } from '../../utils/traits';
 import { useAuth } from '../../hooks/useAuth';
+import tokens from '../../theme/tokens';
 import {
   useAssessmentFlowResultQuery,
   useCareerChatMutation,
@@ -229,7 +230,7 @@ const AssessmentFlowResultPage = () => {
     }
 
     const tween = gsap.to(downloadButtonRef.current, {
-      boxShadow: '0 0 0 1px rgba(111, 236, 255, 0.35), 0 12px 24px rgba(25, 151, 219, 0.3)',
+      boxShadow: `${tokens.glow.cyan}, 0 12px 24px rgba(25, 151, 219, 0.3)`,
       repeat: -1,
       yoyo: true,
       duration: 1.2,
@@ -468,7 +469,7 @@ const AssessmentFlowResultPage = () => {
               key={`cognitive-${result.meta?.generated_at || 'latest'}`}
               metrics={result.cognitive_scores || {}}
               labels={COGNITIVE_LABELS}
-              barColor="#2dd4bf"
+              barColor={tokens.accent.cyan}
               height={300}
             />
           </Card>
@@ -477,7 +478,7 @@ const AssessmentFlowResultPage = () => {
               key={`behavior-${result.meta?.generated_at || 'latest'}`}
               metrics={result.behavior_vector || {}}
               labels={BEHAVIOR_LABELS}
-              barColor="#f59e0b"
+              barColor={tokens.accent.amber}
               height={300}
             />
           </Card>

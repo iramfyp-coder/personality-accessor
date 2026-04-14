@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import tokens, { chartTokens } from '../../theme/tokens';
 
 const toData = (metrics = {}, labels = {}) =>
   Object.entries(labels)
@@ -18,7 +19,7 @@ const toData = (metrics = {}, labels = {}) =>
     }))
     .filter((item) => item.value > 0 || Object.keys(metrics || {}).includes(item.key));
 
-const MetricBarChart = ({ metrics = {}, labels = {}, barColor = '#22D3EE', height = 300 }) => {
+const MetricBarChart = ({ metrics = {}, labels = {}, barColor = tokens.accent.cyan, height = 300 }) => {
   const data = useMemo(() => toData(metrics, labels), [metrics, labels]);
 
   if (!data.length) {
@@ -35,18 +36,18 @@ const MetricBarChart = ({ metrics = {}, labels = {}, barColor = '#22D3EE', heigh
               <stop offset="100%" stopColor={barColor} stopOpacity={0.48} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(164, 185, 233, 0.2)" />
-          <XAxis dataKey="label" tick={{ fill: '#C9D6F3', fontSize: 11, fontWeight: 700 }} />
-          <YAxis domain={[0, 100]} tick={{ fill: '#7F94BE', fontSize: 11 }} />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartTokens.grid} />
+          <XAxis dataKey="label" tick={{ fill: chartTokens.axis, fontSize: 11, fontWeight: 700 }} />
+          <YAxis domain={[0, 100]} tick={{ fill: chartTokens.mutedAxis, fontSize: 11 }} />
           <Tooltip
             formatter={(value) => [`${value}%`, 'Score']}
             contentStyle={{
               borderRadius: 12,
-              border: '1px solid rgba(126, 153, 212, 0.5)',
-              background: 'rgba(11, 15, 26, 0.94)',
-              color: '#dce8ff',
+              border: chartTokens.tooltip.border,
+              background: chartTokens.tooltip.background,
+              color: chartTokens.tooltip.text,
             }}
-            labelStyle={{ color: '#dce8ff', fontWeight: 700 }}
+            labelStyle={{ color: chartTokens.tooltip.text, fontWeight: 700 }}
           />
           <Bar
             dataKey="value"

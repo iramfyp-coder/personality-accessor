@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import tokens, { chartTokens } from '../../theme/tokens';
 
 const LABELS = {
   logical_reasoning: 'Logical',
@@ -34,20 +35,20 @@ const AptitudeBarChart = ({ aptitudeSignals = {}, height = 290 }) => {
     <div className="chart-shell" aria-label="Aptitude bar chart">
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 10, right: 8, left: 0, bottom: 6 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(164, 185, 233, 0.2)" />
-          <XAxis dataKey="label" tick={{ fill: '#C9D6F3', fontSize: 12, fontWeight: 700 }} />
-          <YAxis domain={[0, 100]} tick={{ fill: '#7F94BE', fontSize: 11 }} />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartTokens.grid} />
+          <XAxis dataKey="label" tick={{ fill: chartTokens.axis, fontSize: 12, fontWeight: 700 }} />
+          <YAxis domain={[0, 100]} tick={{ fill: chartTokens.mutedAxis, fontSize: 11 }} />
           <Tooltip
             formatter={(value) => [`${value}%`, 'Aptitude']}
             contentStyle={{
               borderRadius: 12,
-              border: '1px solid rgba(126, 153, 212, 0.5)',
-              background: 'rgba(11, 15, 26, 0.94)',
-              color: '#dce8ff',
+              border: chartTokens.tooltip.border,
+              background: chartTokens.tooltip.background,
+              color: chartTokens.tooltip.text,
             }}
-            labelStyle={{ color: '#dce8ff', fontWeight: 700 }}
+            labelStyle={{ color: chartTokens.tooltip.text, fontWeight: 700 }}
           />
-          <Bar dataKey="value" fill="#F59E0B" radius={[10, 10, 0, 0]} />
+          <Bar dataKey="value" fill={tokens.accent.amber} radius={[10, 10, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

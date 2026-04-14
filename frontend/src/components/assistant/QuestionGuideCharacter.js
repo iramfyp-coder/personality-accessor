@@ -17,6 +17,7 @@ import {
 } from '@react-three/drei';
 import { MathUtils } from 'three';
 import { FiActivity, FiAperture, FiGrid, FiHeart, FiZap } from 'react-icons/fi';
+import tokens from '../../theme/tokens';
 
 const MODEL_PATH = '/models/character.glb';
 
@@ -24,31 +25,31 @@ const traitPersona = {
   O: {
     icon: FiAperture,
     label: 'Creative lens active',
-    tone: '#A855F7',
+    tone: tokens.accent.purple,
     helper: 'Lean into curiosity. Pick what feels most natural right now.',
   },
   C: {
     icon: FiGrid,
     label: 'Structure guide active',
-    tone: '#3B82F6',
+    tone: tokens.accent.blue,
     helper: 'Think about routines and follow-through in your recent behavior.',
   },
   E: {
     icon: FiZap,
     label: 'Energy guide active',
-    tone: '#FACC15',
+    tone: tokens.accent.amber,
     helper: 'Focus on social energy and how often you seek interaction.',
   },
   A: {
     icon: FiHeart,
     label: 'Empathy guide active',
-    tone: '#22C55E',
+    tone: tokens.state.success,
     helper: 'Consider how you respond when collaboration gets difficult.',
   },
   N: {
     icon: FiActivity,
     label: 'Stability guide active',
-    tone: '#EF4444',
+    tone: tokens.state.error,
     helper: 'Think about emotional reactions under stress and uncertainty.',
   },
 };
@@ -209,33 +210,33 @@ const ModelAndCard = ({
       <group ref={cardRef} position={[1.1, -0.1, 0.35]} rotation={[0.08, -0.58, 0.04]}>
         <RoundedBox args={[1.3, 0.8, 0.05]} radius={0.06} smoothness={6}>
           <meshStandardMaterial
-            color="#101b31"
+            color={tokens.background.surface}
             roughness={0.36}
             metalness={0.08}
-            emissive="#0f223f"
+            emissive={tokens.background.secondary}
             emissiveIntensity={0.22}
           />
         </RoundedBox>
 
         <mesh position={[-0.1, 0.22, 0.03]}>
           <boxGeometry args={[0.8, 0.08, 0.01]} />
-          <meshBasicMaterial color="#8ad8ff" transparent opacity={0.8} />
+          <meshBasicMaterial color={tokens.accent.cyan} transparent opacity={0.8} />
         </mesh>
         <mesh position={[-0.14, 0.06, 0.03]}>
           <boxGeometry args={[0.86, 0.06, 0.01]} />
-          <meshBasicMaterial color="#69b9ee" transparent opacity={0.76} />
+          <meshBasicMaterial color={tokens.accent.blueGlow} transparent opacity={0.76} />
         </mesh>
         <mesh position={[-0.18, -0.08, 0.03]}>
           <boxGeometry args={[0.9, 0.06, 0.01]} />
-          <meshBasicMaterial color="#69b9ee" transparent opacity={0.7} />
+          <meshBasicMaterial color={tokens.accent.blueGlow} transparent opacity={0.7} />
         </mesh>
       </group>
 
       <mesh position={[0.96, -0.28, 0.15]} rotation={[0.15, 0, -0.92]}>
         <cylinderGeometry args={[0.05, 0.05, 0.56, 16]} />
         <meshStandardMaterial
-          color="#6fd7ff"
-          emissive="#3cb4f2"
+          color={tokens.accent.cyan}
+          emissive={tokens.accent.blue}
           emissiveIntensity={0.22}
           roughness={0.28}
           metalness={0.15}
@@ -254,8 +255,8 @@ const MascotCanvas = ({ reducedMotion, questionIndex, selectionSignal }) => (
     >
       <ambientLight intensity={0.86} />
       <directionalLight intensity={1.05} position={[2.4, 3.2, 2.6]} />
-      <pointLight intensity={0.8} position={[-2.1, 1.2, 1.6]} color="#22D3EE" />
-      <pointLight intensity={0.58} position={[2.3, -0.8, 1.8]} color="#A855F7" />
+      <pointLight intensity={0.8} position={[-2.1, 1.2, 1.6]} color={tokens.accent.cyan} />
+      <pointLight intensity={0.58} position={[2.3, -0.8, 1.8]} color={tokens.accent.purple} />
 
       <Suspense fallback={<SceneLoader />}>
         <Float

@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import tokens, { chartTokens } from '../../theme/tokens';
 
 const toData = (skills = []) =>
   (Array.isArray(skills) ? skills : [])
@@ -29,17 +30,17 @@ const SkillBarChart = ({ skills = [], height = 320 }) => {
     <div className="chart-shell" aria-label="Skill bar chart">
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} layout="vertical" margin={{ top: 8, right: 10, bottom: 8, left: 16 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(164, 185, 233, 0.2)" />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartTokens.grid} />
           <XAxis
             type="number"
             domain={[0, 100]}
-            tick={{ fill: '#7F94BE', fontSize: 11 }}
+            tick={{ fill: chartTokens.mutedAxis, fontSize: 11 }}
           />
           <YAxis
             type="category"
             dataKey="name"
             width={140}
-            tick={{ fill: '#C9D6F3', fontSize: 11, fontWeight: 700 }}
+            tick={{ fill: chartTokens.axis, fontSize: 11, fontWeight: 700 }}
           />
           <Tooltip
             formatter={(value, key, payload) => [
@@ -48,13 +49,13 @@ const SkillBarChart = ({ skills = [], height = 320 }) => {
             ]}
             contentStyle={{
               borderRadius: 12,
-              border: '1px solid rgba(126, 153, 212, 0.5)',
-              background: 'rgba(11, 15, 26, 0.94)',
-              color: '#dce8ff',
+              border: chartTokens.tooltip.border,
+              background: chartTokens.tooltip.background,
+              color: chartTokens.tooltip.text,
             }}
-            labelStyle={{ color: '#dce8ff', fontWeight: 700 }}
+            labelStyle={{ color: chartTokens.tooltip.text, fontWeight: 700 }}
           />
-          <Bar dataKey="value" fill="#22C55E" radius={[8, 8, 8, 8]} />
+          <Bar dataKey="value" fill={tokens.state.success} radius={[8, 8, 8, 8]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

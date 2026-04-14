@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import { traitColors } from '../../theme/colors';
 import { normalizeTraits, TRAIT_META, TRAIT_ORDER } from '../../utils/traits';
+import { chartTokens } from '../../theme/tokens';
 
 const mapDistributionData = ({ traits, benchmarkTraits }) => {
   const current = normalizeTraits(traits);
@@ -47,18 +48,18 @@ const TraitDistributionChart = ({
     <div className="chart-shell" aria-label="Trait distribution chart">
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} barCategoryGap={compact ? '24%' : '18%'}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(164, 185, 233, 0.2)" />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartTokens.grid} />
           <XAxis
             dataKey="label"
-            tick={{ fill: '#C9D6F3', fontSize: compact ? 11 : 12, fontWeight: 700 }}
-            axisLine={{ stroke: 'rgba(164, 185, 233, 0.25)' }}
-            tickLine={{ stroke: 'rgba(164, 185, 233, 0.25)' }}
+            tick={{ fill: chartTokens.axis, fontSize: compact ? 11 : 12, fontWeight: 700 }}
+            axisLine={{ stroke: chartTokens.axisLine }}
+            tickLine={{ stroke: chartTokens.axisLine }}
           />
           <YAxis
             domain={[0, 100]}
-            tick={{ fill: '#7F94BE', fontSize: 11 }}
-            axisLine={{ stroke: 'rgba(164, 185, 233, 0.25)' }}
-            tickLine={{ stroke: 'rgba(164, 185, 233, 0.25)' }}
+            tick={{ fill: chartTokens.mutedAxis, fontSize: 11 }}
+            axisLine={{ stroke: chartTokens.axisLine }}
+            tickLine={{ stroke: chartTokens.axisLine }}
           />
           <Tooltip
             formatter={(value, name, payload) => {
@@ -73,13 +74,13 @@ const TraitDistributionChart = ({
             }}
             contentStyle={{
               borderRadius: 12,
-              border: '1px solid rgba(126, 153, 212, 0.5)',
-              background: 'rgba(11, 15, 26, 0.94)',
-              color: '#dce8ff',
+              border: chartTokens.tooltip.border,
+              background: chartTokens.tooltip.background,
+              color: chartTokens.tooltip.text,
             }}
-            labelStyle={{ color: '#dce8ff', fontWeight: 700 }}
+            labelStyle={{ color: chartTokens.tooltip.text, fontWeight: 700 }}
           />
-          {!compact && <Legend wrapperStyle={{ color: '#dce8ff' }} />}
+          {!compact && <Legend wrapperStyle={{ color: chartTokens.axis }} />}
           <Bar
             dataKey="current"
             name="Latest"
@@ -95,7 +96,7 @@ const TraitDistributionChart = ({
             dataKey="benchmark"
             name="Baseline"
             radius={[10, 10, 0, 0]}
-            fill="rgba(143, 170, 223, 0.46)"
+            fill="rgba(148, 163, 200, 0.46)"
             isAnimationActive
             animationDuration={860}
           />

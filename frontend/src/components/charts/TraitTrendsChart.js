@@ -12,6 +12,7 @@ import {
 import { TRAIT_ORDER, TRAIT_META } from '../../utils/traits';
 import { traitColors } from '../../theme/colors';
 import { sanitizeChartValue } from '../../utils/chartSafety';
+import tokens, { chartTokens } from '../../theme/tokens';
 
 const TRAIT_COLORS = traitColors;
 
@@ -48,31 +49,31 @@ const TraitTrendsChart = ({ trends = [], compact = false, height = 320 }) => {
     <div className="chart-shell" aria-label="Trait trends chart">
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={visibleData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(164, 185, 233, 0.2)" />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartTokens.grid} />
           <XAxis
             dataKey="label"
-            tick={{ fill: '#C9D6F3', fontSize: compact ? 10 : 12, fontWeight: 700 }}
-            axisLine={{ stroke: 'rgba(164, 185, 233, 0.25)' }}
-            tickLine={{ stroke: 'rgba(164, 185, 233, 0.25)' }}
+            tick={{ fill: chartTokens.axis, fontSize: compact ? 10 : 12, fontWeight: 700 }}
+            axisLine={{ stroke: chartTokens.axisLine }}
+            tickLine={{ stroke: chartTokens.axisLine }}
           />
           <YAxis
             domain={[0, 100]}
-            tick={{ fill: '#7F94BE', fontSize: 11 }}
-            axisLine={{ stroke: 'rgba(164, 185, 233, 0.25)' }}
-            tickLine={{ stroke: 'rgba(164, 185, 233, 0.25)' }}
+            tick={{ fill: chartTokens.mutedAxis, fontSize: 11 }}
+            axisLine={{ stroke: chartTokens.axisLine }}
+            tickLine={{ stroke: chartTokens.axisLine }}
             width={compact ? 32 : 40}
           />
           <Tooltip
             formatter={(value) => [`${value}%`, 'Score']}
             contentStyle={{
               borderRadius: 12,
-              border: '1px solid rgba(126, 153, 212, 0.5)',
-              background: 'rgba(11, 15, 26, 0.94)',
-              color: '#dce8ff',
+              border: chartTokens.tooltip.border,
+              background: chartTokens.tooltip.background,
+              color: chartTokens.tooltip.text,
             }}
-            labelStyle={{ color: '#dce8ff', fontWeight: 700 }}
+            labelStyle={{ color: chartTokens.tooltip.text, fontWeight: 700 }}
           />
-          {!compact && <Legend wrapperStyle={{ color: '#dce8ff' }} />}
+          {!compact && <Legend wrapperStyle={{ color: chartTokens.axis }} />}
           {TRAIT_ORDER.map((traitKey) => (
             <Line
               key={traitKey}
@@ -81,7 +82,7 @@ const TraitTrendsChart = ({ trends = [], compact = false, height = 320 }) => {
               name={TRAIT_META[traitKey].short}
               stroke={TRAIT_COLORS[traitKey]}
               strokeWidth={2}
-              dot={compact ? false : { r: 3, fill: TRAIT_COLORS[traitKey], stroke: '#0B0F1A', strokeWidth: 1 }}
+              dot={compact ? false : { r: 3, fill: TRAIT_COLORS[traitKey], stroke: tokens.background.secondary, strokeWidth: 1 }}
               activeDot={{ r: compact ? 4 : 6, fill: TRAIT_COLORS[traitKey] }}
               isAnimationActive
               animationDuration={760}

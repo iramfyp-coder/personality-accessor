@@ -1,6 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending } from 'three';
+import tokens from '../../theme/tokens';
 
 const ParticleBackground = ({ reducedMotion = false, particleCount = 180 }) => {
   const pointsRef = useRef(null);
@@ -66,7 +67,7 @@ const ParticleBackground = ({ reducedMotion = false, particleCount = 180 }) => {
       <pointsMaterial
         size={safeCount > 220 ? 0.052 : 0.06}
         sizeAttenuation
-        color="#7DD3FC"
+        color={tokens.accent.blueGlow}
         transparent
         opacity={safeCount > 220 ? 0.68 : 0.75}
         depthWrite={false}

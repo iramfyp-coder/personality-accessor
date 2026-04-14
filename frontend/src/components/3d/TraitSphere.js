@@ -4,7 +4,7 @@ import { Html, Line, OrbitControls } from '@react-three/drei';
 import { AdditiveBlending, CatmullRomCurve3, MathUtils, Vector3 } from 'three';
 import mapTraitsTo3DData from '../../utils/traitMapper';
 import { TRAIT_META } from '../../utils/traits';
-import { traitColors } from '../../theme/colors';
+import tokens, { traitColors } from '../../theme/tokens';
 import ParticleBackground from './ParticleBackground';
 import { sanitizeChartValue } from '../../utils/chartSafety';
 
@@ -34,8 +34,8 @@ const tooltipStyle = {
   padding: '0.45rem 0.6rem',
   borderRadius: '10px',
   background: 'rgba(11, 15, 26, 0.93)',
-  border: '1px solid rgba(126, 153, 212, 0.4)',
-  color: '#dce8ff',
+  border: '1px solid rgba(148, 163, 200, 0.4)',
+  color: tokens.text.primary,
   fontWeight: 700,
   fontSize: '0.8rem',
   letterSpacing: '0.02em',
@@ -77,7 +77,7 @@ const SmoothTraitShape = ({ points }) => {
   return (
     <Line
       points={curvePoints}
-      color="#9FB9FF"
+      color={tokens.accent.blueGlow}
       lineWidth={2.5}
       transparent
       opacity={0.92}
@@ -129,11 +129,11 @@ const TraitGraph = ({
       <mesh>
         <sphereGeometry args={[2.6, 56, 56]} />
         <meshStandardMaterial
-          color="#1D4ED8"
+          color={tokens.accent.blue}
           wireframe
           transparent
           opacity={0.08}
-          emissive="#1D4ED8"
+          emissive={tokens.accent.blue}
           emissiveIntensity={0.45}
         />
       </mesh>
@@ -141,7 +141,7 @@ const TraitGraph = ({
       <mesh>
         <sphereGeometry args={[2.88, 44, 44]} />
         <meshBasicMaterial
-          color="#6EA8FF"
+          color={tokens.accent.blueGlow}
           transparent
           opacity={0.08}
           blending={AdditiveBlending}
@@ -267,13 +267,13 @@ const TraitSphere = ({ data }) => {
       >
         <div className="trait-sphere__canvas" role="img" aria-label="3D personality visualization">
           <Canvas camera={{ position: [0, 0, 6], fov: 50 }} dpr={[1, 1.7]}>
-            <color attach="background" args={['#080C15']} />
-            <fog attach="fog" args={['#080C15', 5.8, 12]} />
+            <color attach="background" args={[tokens.background.base]} />
+            <fog attach="fog" args={[tokens.background.base, 5.8, 12]} />
 
             <ambientLight intensity={0.52} />
             <directionalLight intensity={1.3} position={[4, 5, 4]} />
-            <pointLight intensity={0.95} position={[-4, -3, -5]} color="#38BDF8" />
-            <pointLight intensity={0.7} position={[5, -2, 2]} color="#A855F7" />
+            <pointLight intensity={0.95} position={[-4, -3, -5]} color={tokens.accent.cyan} />
+            <pointLight intensity={0.7} position={[5, -2, 2]} color={tokens.accent.purple} />
 
             <ParticleBackground reducedMotion={reducedMotion} particleCount={particleCount} />
 

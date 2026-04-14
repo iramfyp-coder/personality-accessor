@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { traitColors } from '../../theme/colors';
+import tokens from '../../theme/tokens';
 import { TRAIT_META, TRAIT_ORDER } from '../../utils/traits';
 import { sanitizeChartValue } from '../../utils/chartSafety';
 import Skeleton from '../ui/Skeleton';
@@ -124,12 +125,12 @@ const summarizeForCompact = (entries = []) =>
   });
 
 const getCellStyles = ({ trait, score }) => {
-  const tone = traitColors[trait] || '#3B82F6';
+  const tone = traitColors[trait] || tokens.accent.blue;
   const intensity = Math.max(0.16, Math.min(0.78, score / 100));
 
   return {
     '--cell-tone': tone,
-    '--cell-bg': `linear-gradient(145deg, ${toRgba(tone, intensity)}, ${toRgba('#0E1629', 0.92)})`,
+    '--cell-bg': `linear-gradient(145deg, ${toRgba(tone, intensity)}, ${toRgba(tokens.background.surface, 0.92)})`,
     '--cell-border': toRgba(tone, 0.4 + intensity * 0.25),
     '--cell-glow': toRgba(tone, 0.28 + intensity * 0.32),
   };

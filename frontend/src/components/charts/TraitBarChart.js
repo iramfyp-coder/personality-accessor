@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import { TRAIT_ORDER, TRAIT_META, normalizeTraits } from '../../utils/traits';
+import tokens, { chartTokens } from '../../theme/tokens';
 
 const mapChartData = ({ traits, comparisonTraits }) => {
   const current = normalizeTraits(traits);
@@ -41,24 +42,24 @@ const TraitBarChart = ({
     <div className="chart-shell" aria-label="Trait bar chart">
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} barCategoryGap={compact ? '26%' : '20%'}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(164, 185, 233, 0.2)" />
-          <XAxis dataKey="label" tick={{ fill: '#C9D6F3', fontSize: compact ? 11 : 12, fontWeight: 700 }} />
-          <YAxis domain={[0, 100]} tick={{ fill: '#7F94BE', fontSize: 11 }} />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartTokens.grid} />
+          <XAxis dataKey="label" tick={{ fill: chartTokens.axis, fontSize: compact ? 11 : 12, fontWeight: 700 }} />
+          <YAxis domain={[0, 100]} tick={{ fill: chartTokens.mutedAxis, fontSize: 11 }} />
           <Tooltip
             formatter={(value) => [`${value}%`, 'Score']}
             contentStyle={{
               borderRadius: 12,
-              border: '1px solid rgba(126, 153, 212, 0.5)',
-              background: 'rgba(11, 15, 26, 0.94)',
-              color: '#dce8ff',
+              border: chartTokens.tooltip.border,
+              background: chartTokens.tooltip.background,
+              color: chartTokens.tooltip.text,
             }}
-            labelStyle={{ color: '#dce8ff', fontWeight: 700 }}
+            labelStyle={{ color: chartTokens.tooltip.text, fontWeight: 700 }}
           />
-          {hasComparison && !compact && <Legend wrapperStyle={{ color: '#dce8ff' }} />}
+          {hasComparison && !compact && <Legend wrapperStyle={{ color: chartTokens.axis }} />}
           <Bar
             dataKey="current"
             name={currentLabel}
-            fill="#3B82F6"
+            fill={tokens.chart.trait2}
             radius={[10, 10, 0, 0]}
             isAnimationActive
             animationDuration={720}
@@ -67,7 +68,7 @@ const TraitBarChart = ({
             <Bar
               dataKey="previous"
               name={previousLabel}
-              fill="#22D3EE"
+              fill={tokens.chart.trait1}
               radius={[10, 10, 0, 0]}
               isAnimationActive
               animationDuration={860}

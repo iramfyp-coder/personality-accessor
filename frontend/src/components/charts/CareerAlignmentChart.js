@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import { sanitizeChartValue } from '../../utils/chartSafety';
+import tokens, { chartTokens } from '../../theme/tokens';
 
 const mapCareerData = (recommendations = []) =>
   (Array.isArray(recommendations) ? recommendations : [])
@@ -34,39 +35,39 @@ const CareerAlignmentChart = ({ recommendations = [], height = 320 }) => {
         <BarChart data={data} margin={{ top: 10, right: 12, left: 0, bottom: 6 }}>
           <defs>
             <linearGradient id="careerOverall" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22D3EE" stopOpacity={0.95} />
-              <stop offset="100%" stopColor="#22D3EE" stopOpacity={0.52} />
+              <stop offset="0%" stopColor={tokens.chart.trait1} stopOpacity={0.95} />
+              <stop offset="100%" stopColor={tokens.chart.trait1} stopOpacity={0.52} />
             </linearGradient>
             <linearGradient id="careerPersonality" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#A855F7" stopOpacity={0.95} />
-              <stop offset="100%" stopColor="#A855F7" stopOpacity={0.52} />
+              <stop offset="0%" stopColor={tokens.chart.trait3} stopOpacity={0.95} />
+              <stop offset="100%" stopColor={tokens.chart.trait3} stopOpacity={0.52} />
             </linearGradient>
             <linearGradient id="careerCareer" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22C55E" stopOpacity={0.95} />
-              <stop offset="100%" stopColor="#22C55E" stopOpacity={0.52} />
+              <stop offset="0%" stopColor={tokens.chart.trait4} stopOpacity={0.95} />
+              <stop offset="100%" stopColor={tokens.chart.trait4} stopOpacity={0.52} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(164, 185, 233, 0.2)" />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartTokens.grid} />
           <XAxis
             dataKey="role"
-            tick={{ fill: '#C9D6F3', fontSize: 11, fontWeight: 700 }}
+            tick={{ fill: chartTokens.axis, fontSize: 11, fontWeight: 700 }}
             interval={0}
             angle={-20}
             textAnchor="end"
             height={62}
           />
-          <YAxis domain={[0, 100]} tick={{ fill: '#7F94BE', fontSize: 11 }} />
+          <YAxis domain={[0, 100]} tick={{ fill: chartTokens.mutedAxis, fontSize: 11 }} />
           <Tooltip
             formatter={(value) => [`${value}%`, 'Score']}
             contentStyle={{
               borderRadius: 12,
-              border: '1px solid rgba(126, 153, 212, 0.5)',
-              background: 'rgba(11, 15, 26, 0.94)',
-              color: '#dce8ff',
+              border: chartTokens.tooltip.border,
+              background: chartTokens.tooltip.background,
+              color: chartTokens.tooltip.text,
             }}
-            labelStyle={{ color: '#dce8ff', fontWeight: 700 }}
+            labelStyle={{ color: chartTokens.tooltip.text, fontWeight: 700 }}
           />
-          <Legend wrapperStyle={{ color: '#dce8ff' }} />
+          <Legend wrapperStyle={{ color: chartTokens.axis }} />
           <Bar
             dataKey="overall"
             name="Overall Match"
