@@ -78,6 +78,11 @@ export const getAdaptiveQuestion = async (sessionId) => {
   return unwrap(response);
 };
 
+export const getPreviousAdaptiveQuestion = async (sessionId) => {
+  const response = await client.post(`/assessment/${sessionId}/question/previous`);
+  return unwrap(response);
+};
+
 export const submitAdaptiveAnswer = async ({ sessionId, payload }) => {
   const response = await client.post(`/assessment/${sessionId}/answer`, payload);
   return unwrap(response);

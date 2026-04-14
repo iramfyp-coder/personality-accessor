@@ -430,7 +430,7 @@ const AssessmentFlowResultPage = () => {
             </article>
             <div ref={downloadButtonRef}>
               <Button variant="ghost" onClick={downloadPdf}>
-                <FiDownload /> Download PDF
+                <FiDownload /> Download Report
               </Button>
             </div>
           </div>

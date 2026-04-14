@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useReducedMotion } from 'framer-motion';
-import { FiArrowRight, FiBarChart2, FiCircle, FiSkipForward } from 'react-icons/fi';
+import { FiArrowLeft, FiArrowRight, FiBarChart2, FiCircle } from 'react-icons/fi';
 import { gsap } from 'gsap';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -14,6 +14,7 @@ import TraitRadarChart from '../../components/charts/TraitRadarChart';
 import { useAuth } from '../../hooks/useAuth';
 import {
   useAdaptiveQuestionQuery,
+  usePreviousAdaptiveQuestionMutation,
   useSubmitAdaptiveAnswerMutation,
 } from '../../hooks/useAssessmentFlow';
 import {
@@ -139,6 +140,7 @@ const AdaptiveAssessmentTestPage = () => {
 
   const questionQuery = useAdaptiveQuestionQuery(sessionId, Boolean(sessionId));
   const answerMutation = useSubmitAdaptiveAnswerMutation();
+  const previousMutation = usePreviousAdaptiveQuestionMutation();
 
   const [likertValue, setLikertValue] = useState(0);
   const [scaleValue, setScaleValue] = useState(0);
@@ -146,12 +148,12 @@ const AdaptiveAssessmentTestPage = () => {
   const [textValue, setTextValue] = useState('');
   const [exampleValue, setExampleValue] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [statusNote, setStatusNote] = useState('');
   const [questionStartAt, setQuestionStartAt] = useState(Date.now());
 
   const progressBarRef = useRef(null);
   const questionCardRef = useRef(null);
   const sidePanelRef = useRef(null);
-  const autoNextTimerRef = useRef(null);
   const questionRef = useRef(null);
   const radarTweenRef = useRef(null);
   const radarStateRef = useRef({
@@ -251,15 +253,6 @@ const AdaptiveAssessmentTestPage = () => {
     });
   }, [progress, prefersReducedMotion]);
 
-  useEffect(
-    () => () => {
-      if (autoNextTimerRef.current) {
-        window.clearTimeout(autoNextTimerRef.current);
-      }
-    },
-    []
-  );
-
   const canSubmit = useMemo(() => {
     if (!question) {
       return false;
@@ -280,11 +273,11 @@ const AdaptiveAssessmentTestPage = () => {
     }
 
     if (question.type === 'text') {
-      if (textValue.trim().length < 16) {
+      if (textValue.trim().length < 4) {
         return false;
       }
 
-      if (question.expectsExample && exampleValue.trim().length < 8) {
+      if (question.expectsExample && exampleValue.trim().length < 4) {
         return false;
       }
 
@@ -292,38 +285,16 @@ const AdaptiveAssessmentTestPage = () => {
     }
 
     if (question.type === 'scenario') {
-      return Boolean(optionId || textValue.trim().length >= 16);
+      return Boolean(optionId || textValue.trim().length >= 4);
     }
 
     return false;
   }, [question, likertValue, scaleValue, optionId, textValue, exampleValue]);
 
-  const autoNextReady = useMemo(() => {
-    if (!question) {
-      return false;
-    }
-
-    if (question.type === 'likert') {
-      return likertValue >= 1 && likertValue <= 5;
-    }
-
-    if (question.type === 'scale') {
-      const min = Number(question.scaleMin || 1);
-      const max = Number(question.scaleMax || 10);
-      return scaleValue >= min && scaleValue <= max;
-    }
-
-    if (question.type === 'mcq' || question.type === 'scenario') {
-      return Boolean(optionId);
-    }
-
-    return false;
-  }, [question, likertValue, scaleValue, optionId]);
-
   const elapsedTimeMs = useCallback(() => Math.max(300, Date.now() - questionStartAt), [questionStartAt]);
 
   const buildPayload = useCallback(
-    ({ skipped = false } = {}) => {
+    () => {
       const activeQuestion = questionRef.current;
 
       if (!activeQuestion) {
@@ -355,14 +326,6 @@ const AdaptiveAssessmentTestPage = () => {
         stage: activeQuestion.stage || '',
         answerTimeMs: elapsedTimeMs(),
       };
-
-      if (skipped) {
-        return {
-          ...basePayload,
-          skipped: true,
-          answer: 'SKIPPED',
-        };
-      }
 
       if (activeQuestion.type === 'likert') {
         return {
@@ -433,20 +396,21 @@ const AdaptiveAssessmentTestPage = () => {
   );
 
   const submitAnswer = useCallback(
-    async ({ skipped = false } = {}) => {
+    async () => {
       if (!questionRef.current) {
         return;
       }
 
-      if (!skipped && !canSubmit) {
+      if (!canSubmit) {
         setFeedback('Complete the required response fields before continuing.');
         return;
       }
 
       setFeedback('');
+      setStatusNote('');
 
       try {
-        const submissionPayload = buildPayload({ skipped });
+        const submissionPayload = buildPayload();
         if (!submissionPayload) {
           return;
         }
@@ -472,6 +436,12 @@ const AdaptiveAssessmentTestPage = () => {
           }
 
           navigate(`/assessment/result?session=${sessionId}`);
+          return;
+        }
+
+        if (payload.refiningProfile && payload.refiningMessage) {
+          setStatusNote(payload.refiningMessage);
+          return;
         }
       } catch (error) {
         setFeedback(error.message || 'Unable to save answer. Please retry.');
@@ -480,29 +450,20 @@ const AdaptiveAssessmentTestPage = () => {
     [auth.userId, answerMutation, buildPayload, canSubmit, navigate, sessionId]
   );
 
-  useEffect(() => {
-    if (!question || !autoNextReady || answerMutation.isPending) {
+  const goToPrevious = useCallback(async () => {
+    if (!sessionId || previousMutation.isPending) {
       return;
     }
 
-    if (question.type === 'text') {
-      return;
+    setFeedback('');
+    setStatusNote('');
+
+    try {
+      await previousMutation.mutateAsync(sessionId);
+    } catch (error) {
+      setFeedback(error.message || 'Unable to load previous question.');
     }
-
-    if (autoNextTimerRef.current) {
-      window.clearTimeout(autoNextTimerRef.current);
-    }
-
-    autoNextTimerRef.current = window.setTimeout(() => {
-      submitAnswer();
-    }, 280);
-
-    return () => {
-      if (autoNextTimerRef.current) {
-        window.clearTimeout(autoNextTimerRef.current);
-      }
-    };
-  }, [autoNextReady, question, answerMutation.isPending, submitAnswer]);
+  }, [previousMutation, sessionId]);
 
   const liveTraitPreview = useMemo(() => {
     const traits = {
@@ -685,18 +646,24 @@ const AdaptiveAssessmentTestPage = () => {
                 onExampleChange={setExampleValue}
               />
 
+              {statusNote ? <p className="ui-message">{statusNote}</p> : null}
               {feedback ? <p className="ui-message ui-message--error">{feedback}</p> : null}
 
               <div className="question-card__actions phase3-question-actions">
-                <Button onClick={() => submitAnswer()} loading={answerMutation.isPending} disabled={!canSubmit}>
-                  Next <FiArrowRight />
-                </Button>
                 <Button
                   variant="ghost"
-                  onClick={() => submitAnswer({ skipped: true })}
-                  loading={answerMutation.isPending}
+                  onClick={goToPrevious}
+                  loading={previousMutation.isPending}
+                  disabled={
+                    previousMutation.isPending ||
+                    answerMutation.isPending ||
+                    Number(question.sequence || 1) <= 1
+                  }
                 >
-                  Skip <FiSkipForward />
+                  <FiArrowLeft /> Previous
+                </Button>
+                <Button onClick={submitAnswer} loading={answerMutation.isPending} disabled={!canSubmit}>
+                  Next <FiArrowRight />
                 </Button>
               </div>
             </Card>

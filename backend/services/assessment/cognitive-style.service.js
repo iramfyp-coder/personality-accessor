@@ -50,14 +50,35 @@ const toNormalizedAnswerScore = ({ answer = {}, question = {} }) => {
 };
 
 const toIntent = (question = {}, answer = {}) => {
-  const fromQuestion = String(question.intent || '').trim();
+  const resolveIntent = (value = '') => {
+    const token = String(value || '').toLowerCase().trim();
+    if (!token) {
+      return '';
+    }
+
+    if (token.includes('analysis_style') || token.includes('analysis')) return 'analytical';
+    if (token.includes('decision_style') || token.includes('decision')) return 'planning';
+    if (token.includes('risk_preference') || token.includes('risk')) return 'risk';
+    if (token.includes('team_preference') || token.includes('communication_style')) return 'teamwork';
+    if (token.includes('leadership_behavior') || token.includes('leadership')) return 'leadership';
+    if (token.includes('creativity_behavior') || token.includes('creativity')) return 'creativity';
+    if (token.includes('stress_response') || token.includes('deadline')) return 'deadline';
+    if (token.includes('adaptability') || token.includes('learning')) return 'learning';
+    if (token.includes('confidence_behavior') || token.includes('social energy')) return 'social energy';
+    if (token.includes('structure')) return 'structure';
+    if (token.includes('conflict')) return 'conflict';
+
+    return token;
+  };
+
+  const fromQuestion = resolveIntent(question.intent || '');
   if (fromQuestion) {
-    return fromQuestion.toLowerCase();
+    return fromQuestion;
   }
 
-  const fromAnswer = String(answer?.metadata?.intent || '').trim();
+  const fromAnswer = resolveIntent(answer?.metadata?.intent || '');
   if (fromAnswer) {
-    return fromAnswer.toLowerCase();
+    return fromAnswer;
   }
 
   return '';

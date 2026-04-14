@@ -9,6 +9,36 @@ const normalizeTraitScores = (scores = {}) =>
     return accumulator;
   }, {});
 
+const zScoreNormalizeTraits = (scores = {}) => {
+  const raw = normalizeTraitScores(scores);
+  const values = TRAITS.map((trait) => Number(raw[trait] || 50));
+  const mean = values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
+  const variance =
+    values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(values.length, 1);
+  const stdDev = Math.sqrt(variance);
+  const safeStdDev = stdDev > 0.001 ? stdDev : 1;
+
+  const zScores = {};
+  const zNormalized = {};
+  const blended = {};
+
+  TRAITS.forEach((trait) => {
+    const value = Number(raw[trait] || 50);
+    const z = (value - mean) / safeStdDev;
+    const zScaled = clamp(50 + z * 12, 0, 100);
+
+    zScores[trait] = Number(z.toFixed(4));
+    zNormalized[trait] = round(zScaled);
+    blended[trait] = clamp(round(zScaled * 0.72 + value * 0.28), 0, 100);
+  });
+
+  return {
+    traits: normalizeTraitScores(blended),
+    zScores,
+    zNormalized: normalizeTraitScores(zNormalized),
+  };
+};
+
 const traitLabels = {
   O: 'Openness',
   C: 'Conscientiousness',
@@ -212,6 +242,12 @@ const mergeTraitSignals = (...signals) => {
   return merged;
 };
 
+const scaleTraitSignal = (signal = {}, multiplier = 1) =>
+  TRAITS.reduce((accumulator, trait) => {
+    accumulator[trait] = Number(signal?.[trait] || 0) * Number(multiplier || 1);
+    return accumulator;
+  }, {});
+
 const applyDeltas = (base, delta) => {
   const next = {};
 
@@ -252,63 +288,98 @@ const toHybridArchetypeScores = ({ traits, cognitiveScores = {}, behaviorVector 
   }, {});
 };
 
-const buildInterpretation = ({ traits = {}, cognitiveScores = {}, behaviorVector = {} }) => {
+const buildInterpretation = ({
+  traits = {},
+  traitZScores = {},
+  cognitiveScores = {},
+  behaviorVector = {},
+}) => {
   const introversionScore = clamp(100 - Number(traits.E || 50), 0, 100);
   const analytical = Number(cognitiveScores.analytical || 50);
   const creative = Number(cognitiveScores.creative || 50);
   const strategic = Number(cognitiveScores.strategic || 50);
   const systematic = Number(cognitiveScores.systematic || 50);
   const leadership = Number(behaviorVector.leadership || 50);
+  const teamPreference = Number(behaviorVector.team_preference || 50);
+  const stability = Number(behaviorVector.stress_tolerance || 50);
+  const zE = Number(traitZScores.E || 0);
+  const zC = Number(traitZScores.C || 0);
+  const zO = Number(traitZScores.O || 0);
 
-  if (analytical >= 72 && introversionScore >= 60) {
-    return {
+  const profileCandidates = [
+    {
       label: 'Logical Researcher',
+      score:
+        analytical * 0.36 +
+        introversionScore * 0.2 +
+        traits.C * 0.18 +
+        (100 - traits.N) * 0.16 +
+        stability * 0.1,
       summary:
-        'Strong analytical reasoning with introverted focus suggests deep work, evidence-led thinking, and high independent exploration capacity.',
+        'Strong analytical depth with focused independent execution suggests high-quality evidence-led reasoning.',
       best_fit_paths: ['Research-heavy engineering', 'Data science', 'R&D and experimentation'],
-    };
-  }
-
-  if (leadership >= 68 && traits.E >= 62) {
-    return {
+    },
+    {
       label: 'Social Leader',
+      score:
+        leadership * 0.28 +
+        traits.E * 0.24 +
+        teamPreference * 0.14 +
+        traits.A * 0.14 +
+        strategic * 0.1 +
+        traits.C * 0.1 +
+        (zE > 0.4 ? 2 : -2),
       summary:
-        'High leadership behavior and extraversion indicate influence-driven execution with strong cross-team mobilization.',
+        'Influence, communication, and directional clarity indicate strong cross-team mobilization potential.',
       best_fit_paths: ['Product leadership', 'Program management', 'Business-facing technical roles'],
-    };
-  }
-
-  if (creative >= 70 && strategic >= 62) {
-    return {
+    },
+    {
       label: 'Creative Strategist',
+      score: creative * 0.34 + strategic * 0.28 + traits.O * 0.22 + traits.E * 0.08 + traits.C * 0.08,
       summary:
-        'Creative ideation paired with strategic thinking suggests strong innovation direction and hypothesis-to-impact translation.',
+        'Creative ideation combined with strategic framing suggests strong innovation direction and scenario planning.',
       best_fit_paths: ['Product strategy', 'UX innovation', 'Growth experimentation'],
-    };
-  }
-
-  if (systematic >= 68 && analytical >= 62) {
-    return {
+    },
+    {
       label: 'Technical Architect',
+      score: systematic * 0.32 + analytical * 0.26 + traits.C * 0.22 + (100 - traits.N) * 0.12 + traits.O * 0.08,
       summary:
-        'Systematic cognition with analytical depth suggests strong architecture design and execution reliability.',
+        'Systematic cognition and analytical discipline indicate strong architecture and reliability-oriented execution.',
       best_fit_paths: ['Backend engineering', 'Platform architecture', 'DevOps and reliability'],
-    };
-  }
-
-  if (analytical >= 64 && traits.C >= 62) {
-    return {
+    },
+    {
       label: 'Analytical Builder',
-      summary: 'Balanced analysis and execution patterns indicate strong delivery through structured problem decomposition.',
+      score:
+        analytical * 0.28 +
+        traits.C * 0.28 +
+        strategic * 0.14 +
+        stability * 0.14 +
+        traits.O * 0.08 +
+        (zC > 0.35 ? 2 : 0),
+      summary:
+        'Balanced analysis and execution suggest dependable delivery through structured decomposition and follow-through.',
       best_fit_paths: ['Engineering execution roles', 'Operations analytics', 'Technical consulting'],
-    };
+    },
+    {
+      label: 'Balanced Operator',
+      score:
+        ((traits.O + traits.C + traits.E + traits.A + (100 - Math.abs(50 - traits.N))) / 5) * 0.68 +
+        (strategic + stability + teamPreference) * 0.106,
+      summary:
+        'Adaptable and steady profile with balanced technical, interpersonal, and decision behavior across contexts.',
+      best_fit_paths: ['Generalist software roles', 'Cross-functional execution', 'Business analysis'],
+    },
+  ];
+
+  profileCandidates.sort((a, b) => b.score - a.score);
+  const top = profileCandidates[0];
+  const margin = Number(top?.score || 0) - Number(profileCandidates[1]?.score || 0);
+
+  if (margin < 1.6 && top?.label !== 'Balanced Operator') {
+    return profileCandidates.find((item) => item.label === 'Balanced Operator') || top;
   }
 
-  return {
-    label: 'Balanced Operator',
-    summary: 'Adaptable profile with balanced technical and social behavior across changing work contexts.',
-    best_fit_paths: ['Generalist software roles', 'Cross-functional execution', 'Business analysis'],
-  };
+  return top;
 };
 
 const buildStrengthsAndWeaknesses = (traits, profileVector) => {
@@ -367,12 +438,18 @@ const evaluatePersonalityProfile = ({
   behaviorVector = {},
 }) => {
   const ocean = calculateOceanFromAnswers({ answers, questionPlan });
-  const cvDeltas = baseTraitInfluenceFromCv(cvData, profileVector);
-  const behaviorDeltas = traitAdjustmentsFromBehavior(behaviorAnalysis, behaviorVector);
+  const cvDeltas = scaleTraitSignal(baseTraitInfluenceFromCv(cvData, profileVector), 0.34);
+  const behaviorDeltas = scaleTraitSignal(
+    traitAdjustmentsFromBehavior(behaviorAnalysis, behaviorVector),
+    0.88
+  );
+  const blendedRawTraits = applyDeltas(ocean.normalized, mergeTraitSignals(cvDeltas, behaviorDeltas));
+  const zNormalization = zScoreNormalizeTraits(blendedRawTraits);
+  const traits = zNormalization.traits;
 
-  const traits = applyDeltas(ocean.normalized, mergeTraitSignals(cvDeltas, behaviorDeltas));
   const interpretation = buildInterpretation({
     traits,
+    traitZScores: zNormalization.zScores,
     cognitiveScores,
     behaviorVector,
   });
@@ -389,6 +466,9 @@ const evaluatePersonalityProfile = ({
   return {
     personality_type: interpretation.label,
     trait_scores: traits,
+    trait_z_scores: zNormalization.zScores,
+    trait_z_normalized: zNormalization.zNormalized,
+    trait_pre_z_scores: blendedRawTraits,
     ocean_normalized: ocean.normalized,
     ocean_counts: ocean.counts,
     hybrid_trait_scores: archetypeScores,

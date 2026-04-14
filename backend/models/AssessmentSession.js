@@ -391,6 +391,11 @@ const questionPlanItemSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    intentTag: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     trait: {
       type: String,
       default: '',

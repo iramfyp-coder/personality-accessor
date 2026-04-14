@@ -37,6 +37,9 @@ const intentFromQuestion = (question = {}, answer = {}) =>
     .toLowerCase()
     .trim();
 
+const intentMatches = (intent = '', tokens = []) =>
+  (Array.isArray(tokens) ? tokens : []).some((token) => String(intent || '').includes(token));
+
 const labelContains = (value = '', tokens = []) => {
   const lower = String(value || '').toLowerCase();
   return tokens.some((token) => lower.includes(token));
@@ -85,30 +88,35 @@ const toBehaviorVector = ({ answers = [], questionPlan = [], behaviorAnalysis = 
     const score = toNormalizedScore({ answer, question });
     const centered = (score - 0.5) * 2;
 
-    if (intent === 'leadership') {
+    if (intentMatches(intent, ['leadership', 'leadership_behavior', 'confidence_behavior'])) {
       vector.leadership += centered * 24;
       vector.decision_speed += centered * 10;
       contributions.leadership += 1;
       contributions.decision_speed += 1;
     }
 
-    if (intent === 'risk') {
+    if (intentMatches(intent, ['risk', 'risk_preference', 'stress_response'])) {
       vector.risk_tolerance += centered * 26;
       vector.decision_speed += centered * 8;
       contributions.risk_tolerance += 1;
       contributions.decision_speed += 1;
     }
 
-    if (intent === 'deadline') {
+    if (intentMatches(intent, ['deadline', 'stress_response', 'decision_style'])) {
       vector.stress_tolerance += centered * 26;
       contributions.stress_tolerance += 1;
     }
 
-    if (intent === 'teamwork' || intent === 'conflict' || intent === 'social energy') {
+    if (intentMatches(intent, ['teamwork', 'conflict', 'social energy', 'team_preference', 'communication_style'])) {
       vector.team_preference += centered * 20;
       vector.leadership += centered * 8;
       contributions.team_preference += 1;
       contributions.leadership += 1;
+    }
+
+    if (intentMatches(intent, ['adaptability', 'decision_style', 'analysis_style'])) {
+      vector.decision_speed += centered * 10;
+      contributions.decision_speed += 1;
     }
 
     if (String(answer.type || '').toLowerCase() === 'mcq') {

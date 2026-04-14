@@ -161,7 +161,13 @@ const computeAptitudeSignals = ({ answers = [], questionPlan = [], cvData = {} }
     const category = String(question?.category || answer?.metadata?.category || '').toLowerCase();
     const intent = String(question?.intent || answer?.metadata?.intent || '').toLowerCase();
 
-    return category.includes('aptitude') || intent === 'analytical' || intent === 'planning';
+    return (
+      category.includes('aptitude') ||
+      category.includes('analytical') ||
+      intent.includes('analytical') ||
+      intent.includes('analysis') ||
+      intent.includes('planning')
+    );
   });
 
   const aptitudeScore = aptitudeAnswers.length

@@ -5,6 +5,7 @@ const {
   uploadCv,
   startAdaptiveAssessment,
   getCurrentQuestion,
+  getPreviousQuestion,
   answerAdaptiveQuestion,
   getAssessmentResult,
   downloadAssessmentResultPdf,
@@ -57,6 +58,7 @@ router.get('/:id/events', streamAssessmentProgress);
 router.get('/:id', getFlowSessionById);
 router.post('/start', startAdaptiveAssessment);
 router.get('/:id/question', getCurrentQuestion);
+router.post('/:id/question/previous', getPreviousQuestion);
 router.post('/:id/answer', answerAdaptiveQuestion);
 router.get('/:id/result', getAssessmentResult);
 router.get('/:id/result/pdf', downloadAssessmentResultPdf);

@@ -77,7 +77,7 @@ const QuestionRenderer = ({
           onInteraction?.('example', value);
         }}
         expectsExample={Boolean(question.expectsExample)}
-        minLength={Number(question.expectedLength || 16)}
+        minLength={4}
       />
     );
   }
@@ -108,7 +108,7 @@ const QuestionRenderer = ({
               onInteraction?.('scenario_example', value);
             }}
             expectsExample={Boolean(question.expectsExample)}
-            minLength={Number(question.expectedLength || 16)}
+            minLength={4}
           />
         ) : null}
       </>

@@ -6,13 +6,10 @@ const TextAnswer = ({
   exampleValue = '',
   onExampleChange,
   expectsExample = false,
-  minLength = 16,
+  minLength = 4,
 }) => {
   const charCount = value.trim().length;
-  const placeholder =
-    minLength >= 140
-      ? 'Provide context, your decision, and measurable outcome'
-      : 'Write a concise real-world response';
+  const placeholder = 'Write your response';
 
   return (
     <div className="adaptive-text-wrap">
@@ -24,7 +21,7 @@ const TextAnswer = ({
       />
 
       <p className="adaptive-text-count">
-        {charCount} characters{charCount < minLength ? ` (min ${minLength})` : ''}
+        {charCount} characters
       </p>
 
       {expectsExample ? (

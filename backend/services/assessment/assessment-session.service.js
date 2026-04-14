@@ -150,11 +150,11 @@ const appendProgressEvent = async ({ session, event }) => {
   return nextEvent;
 };
 
-const toPublicQuestion = (session) => {
+const toPublicQuestionByIndex = (session, questionIndex) => {
   const totalQuestions = Array.isArray(session.questionPlan) ? session.questionPlan.length : 0;
-  const currentIndex = Number(session.currentQuestionIndex || 0);
+  const currentIndex = Number(questionIndex || 0);
 
-  if (currentIndex >= totalQuestions) {
+  if (currentIndex >= totalQuestions || currentIndex < 0) {
     return null;
   }
 
@@ -181,6 +181,7 @@ const toPublicQuestion = (session) => {
     category: question.category || 'personality',
     plannerCategory: question.plannerCategory || question.category || 'personality',
     intent: question.intent || '',
+    intentTag: question.intentTag || question.intent || '',
     trait: question.trait || question.traitTarget || question.traitFocus || '',
     difficulty: question.activeDifficulty || question.difficulty,
     answerFormat: question.answerFormat || '',
@@ -200,6 +201,9 @@ const toPublicQuestion = (session) => {
     theme: question.theme || 'personality',
   };
 };
+
+const toPublicQuestion = (session) =>
+  toPublicQuestionByIndex(session, Number(session.currentQuestionIndex || 0));
 
 const toPublicBehaviorPrompt = (session) => {
   const totalPrompts = Array.isArray(session.behaviorPrompts)
@@ -282,5 +286,6 @@ module.exports = {
   appendProgressEvent,
   toPublicSession,
   toPublicQuestion,
+  toPublicQuestionByIndex,
   toPublicBehaviorPrompt,
 };

@@ -19,6 +19,7 @@ const {
   appendProgressEvent,
   toPublicSession,
   toPublicQuestion,
+  toPublicQuestionByIndex,
   toPublicBehaviorPrompt,
 } = require('../services/assessment/assessment-session.service');
 const { generateAssessmentResult } = require('../services/assessment/assessment-result.service');
@@ -44,8 +45,8 @@ const {
   upsertUnifiedAnswer,
 } = require('../services/assessment/unified-contracts.service');
 
-const MIN_BEHAVIOR_ANSWER_LENGTH = 40;
-const MIN_TEXT_ANSWER_LENGTH = 16;
+const MIN_BEHAVIOR_ANSWER_LENGTH = 4;
+const MIN_TEXT_ANSWER_LENGTH = 4;
 const USER_ROLES = ['student', 'graduate', 'professional'];
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -220,6 +221,25 @@ const toProfileRawText = ({ profile = {}, userRole = '' }) => {
 
 const toQuestionIdentity = (question = {}) => toText(question.questionId || question.id);
 
+const prefetchNextQuestion = ({ session }) => {
+  const currentIndex = Number(session.currentQuestionIndex || 0);
+  const prefetchedQuestion = toPublicQuestionByIndex(session, currentIndex + 1);
+
+  const previousPrefetchedId = toText(session?.adaptiveMetrics?.prefetchedQuestion?.questionId);
+  const nextPrefetchedId = toText(prefetchedQuestion?.questionId);
+
+  if (previousPrefetchedId !== nextPrefetchedId) {
+    session.adaptiveMetrics = {
+      ...(session.adaptiveMetrics || {}),
+      prefetchedQuestion,
+      prefetchedQuestionId: nextPrefetchedId || '',
+      prefetchedAt: new Date(),
+    };
+  }
+
+  return prefetchedQuestion;
+};
+
 const normalizeResponseTimeMs = (value) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -309,8 +329,11 @@ const normalizeTextFields = ({ text, example, expectsExample }) => {
     throw createHttpError(400, `text answer must be at least ${MIN_TEXT_ANSWER_LENGTH} characters`);
   }
 
-  if (expectsExample && normalizedExample.length < 8) {
-    throw createHttpError(400, 'example is required for this question and must be at least 8 characters');
+  if (expectsExample && normalizedExample.length < MIN_TEXT_ANSWER_LENGTH) {
+    throw createHttpError(
+      400,
+      `example is required for this question and must be at least ${MIN_TEXT_ANSWER_LENGTH} characters`
+    );
   }
 
   return {
@@ -325,7 +348,8 @@ const toBaseMetadata = (question, normalizedScore = 0, extra = {}) => ({
   category: question.category || '',
   plannerCategory: question.plannerCategory || question.category || '',
   traitTarget: question.trait || question.traitTarget || question.traitFocus || '',
-  intent: question.intent || '',
+  intent: question.intent || question.intentTag || '',
+  intentTag: question.intentTag || question.intent || '',
   stage: question.stage || '',
   theme: question.theme || '',
   answerFormat: question.answerFormat || '',
@@ -709,6 +733,7 @@ const uploadCv = async (req, res, next) => {
       confidenceExtensionApplied: false,
       inconsistencyExtensionApplied: false,
       extensionReasons: [],
+      prefetchedSupplementalQuestionPlan: [],
       evaluatedAt: new Date(),
     };
     session.currentQuestionIndex = 0;
@@ -865,11 +890,17 @@ const startAdaptiveAssessment = async (req, res, next) => {
       confidenceExtensionApplied: false,
       inconsistencyExtensionApplied: false,
       extensionReasons: [],
+      prefetchedSupplementalQuestionPlan: Array.isArray(
+        questionOutput.prefetchedSupplementalQuestionPlan
+      )
+        ? questionOutput.prefetchedSupplementalQuestionPlan
+        : [],
       evaluatedAt: new Date(),
     };
     session.status = 'in_progress';
     transitionSessionStage({ session, nextStage: 'questionnaire' });
     session.lastActiveAt = new Date();
+    const prefetchedQuestion = prefetchNextQuestion({ session });
 
     await session.save();
 
@@ -886,6 +917,7 @@ const startAdaptiveAssessment = async (req, res, next) => {
       data: {
         session: toPublicSession(session),
         question: toPublicQuestion(session),
+        prefetchedQuestion,
       },
       message: 'Adaptive assessment started successfully',
     });
@@ -902,10 +934,15 @@ const getCurrentQuestion = async (req, res, next) => {
     });
 
     if (session.stage === 'questionnaire') {
+      const prefetchedQuestion = prefetchNextQuestion({ session });
+      session.lastActiveAt = new Date();
+      await session.save();
+
       return sendSuccess(res, {
         data: {
           session: toPublicSession(session),
           question: toPublicQuestion(session),
+          prefetchedQuestion,
           next: 'questionnaire',
         },
         message: 'Current adaptive question fetched',
@@ -932,6 +969,38 @@ const getCurrentQuestion = async (req, res, next) => {
         next: 'result',
       },
       message: 'Assessment already completed',
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getPreviousQuestion = async (req, res, next) => {
+  try {
+    const session = await getSessionForUser({
+      sessionId: req.params.id,
+      user: req.user,
+    });
+
+    if (session.stage !== 'questionnaire') {
+      throw createHttpError(409, 'Previous question navigation is only available during questionnaire stage');
+    }
+
+    const currentIndex = Number(session.currentQuestionIndex || 0);
+    session.currentQuestionIndex = clamp(currentIndex - 1, 0, Math.max((session.questionPlan || []).length - 1, 0));
+    const prefetchedQuestion = prefetchNextQuestion({ session });
+    session.lastActiveAt = new Date();
+    await session.save();
+
+    return sendSuccess(res, {
+      data: {
+        session: toPublicSession(session),
+        question: toPublicQuestion(session),
+        prefetchedQuestion,
+        movedBack: session.currentQuestionIndex !== currentIndex,
+        next: 'questionnaire',
+      },
+      message: 'Previous question loaded',
     });
   } catch (error) {
     return next(error);
@@ -972,6 +1041,7 @@ const answerAdaptiveQuestion = async (req, res, next) => {
       if (!isCurrentQuestionId && existingAnswer) {
         // Idempotent recovery path for delayed duplicate submits from previously answered questions.
         hydrateLegacyAnswerViews(session);
+        const prefetchedQuestion = prefetchNextQuestion({ session });
         session.lastActiveAt = new Date();
         await session.save();
 
@@ -979,6 +1049,7 @@ const answerAdaptiveQuestion = async (req, res, next) => {
           data: {
             session: toPublicSession(session),
             question: toPublicQuestion(session),
+            prefetchedQuestion,
             completedQuestionnaire: false,
             staleSubmissionRecovered: true,
             adaptiveConfidence: Number(session.adaptiveMetrics?.questionnaireConfidence || 0),
@@ -993,72 +1064,79 @@ const answerAdaptiveQuestion = async (req, res, next) => {
 
       let fatigueSnapshot = session.adaptiveMetrics?.fatigue || null;
 
-      if (!existingAnswer) {
-        const normalized = await normalizeQuestionAnswer({
-          body: payload,
-          question: currentQuestion,
-          profileVector: session.profileVector || {},
-        });
+      const normalized = await normalizeQuestionAnswer({
+        body: payload,
+        question: currentQuestion,
+        profileVector: session.profileVector || {},
+      });
 
-        const upsertResult = upsertUnifiedAnswer({
-          answers: session.answers || [],
-          answer: {
-            questionId: currentQuestionId,
-            type: normalized.type,
-            value: normalized.value,
-            metadata: normalized.metadata,
-            answeredAt: new Date(),
-          },
-        });
+      const upsertResult = upsertUnifiedAnswer({
+        answers: session.answers || [],
+        answer: {
+          questionId: currentQuestionId,
+          type: normalized.type,
+          value: normalized.value,
+          metadata: normalized.metadata,
+          answeredAt: new Date(),
+        },
+      });
 
-        session.answers = upsertResult.answers;
+      session.answers = upsertResult.answers;
 
-        if (upsertResult.inserted) {
-          const previousTelemetry = Array.isArray(session.adaptiveMetrics?.answerTelemetry)
-            ? session.adaptiveMetrics.answerTelemetry
-            : [];
+      const previousTelemetry = Array.isArray(session.adaptiveMetrics?.answerTelemetry)
+        ? session.adaptiveMetrics.answerTelemetry
+        : [];
 
-          const nextTelemetry = [
-            ...previousTelemetry,
-            {
-              questionId: currentQuestionId,
-              responseTimeMs: Number(normalized.metadata?.responseTimeMs || 0),
-              isNeutral: Boolean(normalized.metadata?.isNeutral),
-              isSkipped: Boolean(normalized.metadata?.isSkipped),
-              stage: currentQuestion.stage || '',
-              sequence: Number.isFinite(submittedSequence) ? submittedSequence : currentQuestion.sequence,
-              answeredAt: new Date().toISOString(),
-            },
-          ].slice(-400);
+      const nextTelemetryEntry = {
+        questionId: currentQuestionId,
+        responseTimeMs: Number(normalized.metadata?.responseTimeMs || 0),
+        isNeutral: Boolean(normalized.metadata?.isNeutral),
+        isSkipped: Boolean(normalized.metadata?.isSkipped),
+        stage: currentQuestion.stage || '',
+        sequence: Number.isFinite(submittedSequence) ? submittedSequence : currentQuestion.sequence,
+        answeredAt: new Date().toISOString(),
+      };
 
-          fatigueSnapshot = computeFatigueMetrics({
-            answerTelemetry: nextTelemetry,
-            totalQuestions: Array.isArray(session.questionPlan) ? session.questionPlan.length : 0,
-          });
+      const existingTelemetryIndex = previousTelemetry.findIndex(
+        (item) => String(item?.questionId || '') === String(currentQuestionId)
+      );
 
-          session.questionPlan = adaptUpcomingQuestions({
-            session,
-            answeredQuestionId: currentQuestionId,
-            fatigueState: fatigueSnapshot,
-          });
-          session.currentQuestionIndex += 1;
+      const nextTelemetry =
+        existingTelemetryIndex >= 0
+          ? previousTelemetry.map((item, index) =>
+              index === existingTelemetryIndex ? nextTelemetryEntry : item
+            )
+          : [...previousTelemetry, nextTelemetryEntry];
 
-          session.adaptiveMetrics = {
-            ...(session.adaptiveMetrics || {}),
-            answerTelemetry: nextTelemetry,
-            fatigue: fatigueSnapshot,
-            fatigueDetected: Boolean(fatigueSnapshot?.isFatigued),
-          };
+      fatigueSnapshot = computeFatigueMetrics({
+        answerTelemetry: nextTelemetry,
+        totalQuestions: Array.isArray(session.questionPlan) ? session.questionPlan.length : 0,
+      });
 
-          session.askedQuestions = [...(session.askedQuestions || []), currentQuestionId].slice(-400);
+      session.questionPlan = adaptUpcomingQuestions({
+        session,
+        answeredQuestionId: currentQuestionId,
+        fatigueState: fatigueSnapshot,
+      });
+      session.currentQuestionIndex = Math.min(
+        Number(session.currentQuestionIndex || 0) + 1,
+        Array.isArray(session.questionPlan) ? session.questionPlan.length : Number(session.currentQuestionIndex || 0) + 1
+      );
 
-          const intent = String(currentQuestion.intent || '').trim();
-          if (intent) {
-            const existingIntents = Array.isArray(session.usedIntents) ? session.usedIntents : [];
-            if (!existingIntents.includes(intent)) {
-              session.usedIntents = [...existingIntents, intent].slice(-200);
-            }
-          }
+      session.adaptiveMetrics = {
+        ...(session.adaptiveMetrics || {}),
+        answerTelemetry: nextTelemetry.slice(-400),
+        fatigue: fatigueSnapshot,
+        fatigueDetected: Boolean(fatigueSnapshot?.isFatigued),
+      };
+
+      session.askedQuestions = [...(session.askedQuestions || []), currentQuestionId].slice(-400);
+
+      const intent = String(currentQuestion.intentTag || currentQuestion.intent || '').trim();
+      if (intent) {
+        const existingIntents = Array.isArray(session.usedIntents) ? session.usedIntents : [];
+        if (!existingIntents.includes(intent)) {
+          session.usedIntents = [...existingIntents, intent].slice(-300);
         }
       }
 
@@ -1076,7 +1154,7 @@ const answerAdaptiveQuestion = async (req, res, next) => {
           event: {
             stage: 'questionnaire',
             status: 'processing',
-            message: 'Extending questionnaire for confidence and consistency calibration...',
+            message: extensionSignal.refiningMessage || 'Refining your profile for better accuracy…',
             meta: {
               extraQuestions: extensionSignal.extraQuestions,
               reasons: extensionSignal.reasons,
@@ -1084,12 +1162,23 @@ const answerAdaptiveQuestion = async (req, res, next) => {
           },
         });
 
-        const supplemental = await generateSupplementalQuestionPlan({
-          cvData: session.cvData || {},
-          askedQuestions: session.askedQuestions || [],
-          existingQuestionPlan: session.questionPlan || [],
-          additionalCount: extensionSignal.extraQuestions,
-        });
+        const cachedSupplemental = Array.isArray(
+          session.adaptiveMetrics?.prefetchedSupplementalQuestionPlan
+        )
+          ? session.adaptiveMetrics.prefetchedSupplementalQuestionPlan
+              .slice(0, extensionSignal.extraQuestions)
+              .filter(Boolean)
+          : [];
+
+        const supplemental =
+          cachedSupplemental.length === extensionSignal.extraQuestions
+            ? cachedSupplemental
+            : await generateSupplementalQuestionPlan({
+                cvData: session.cvData || {},
+                askedQuestions: session.askedQuestions || [],
+                existingQuestionPlan: session.questionPlan || [],
+                additionalCount: extensionSignal.extraQuestions,
+              });
 
         if (supplemental.length > 0) {
           session.questionPlan = [...(session.questionPlan || []), ...supplemental];
@@ -1115,6 +1204,7 @@ const answerAdaptiveQuestion = async (req, res, next) => {
               scaleMax: question.scaleMax,
               expectedAnswer: question.expectedAnswer,
               intent: question.intent,
+              intentTag: question.intentTag || question.intent,
               signature: question.memorySignature,
             })),
           ].slice(-240);
@@ -1128,6 +1218,8 @@ const answerAdaptiveQuestion = async (req, res, next) => {
             ])
           );
 
+          const prefetchedQuestion = prefetchNextQuestion({ session });
+
           session.adaptiveMetrics = {
             ...(session.adaptiveMetrics || {}),
             questionnaireConfidence: Number(extensionSignal.confidence || 0),
@@ -1136,12 +1228,12 @@ const answerAdaptiveQuestion = async (req, res, next) => {
             confidenceExtensionApplied:
               Boolean(session.adaptiveMetrics?.confidenceExtensionApplied) ||
               extensionSignal.reasons.includes('low_confidence'),
-            inconsistencyExtensionApplied:
-              Boolean(session.adaptiveMetrics?.inconsistencyExtensionApplied) ||
-              extensionSignal.reasons.includes('inconsistent_answers'),
+            inconsistencyExtensionApplied: Boolean(session.adaptiveMetrics?.inconsistencyExtensionApplied),
             extensionReasons: nextExtensionReasons,
             shouldStopEarly: false,
             evaluatedAt: new Date(),
+            refinementMessage: extensionSignal.refiningMessage || '',
+            prefetchedSupplementalQuestionPlan: [],
           };
 
           await session.save();
@@ -1163,12 +1255,16 @@ const answerAdaptiveQuestion = async (req, res, next) => {
             data: {
               session: toPublicSession(session),
               question: toPublicQuestion(session),
+              prefetchedQuestion,
               completedQuestionnaire: false,
               adaptiveConfidence: Number(extensionSignal.confidence || 0),
               extensionApplied: true,
               extensionReasons: extensionSignal.reasons,
+              refiningProfile: true,
+              refiningMessage: extensionSignal.refiningMessage || 'Refining your profile for better accuracy…',
             },
-            message: 'Question answer recorded. Additional adaptive questions added for higher confidence.',
+            message:
+              extensionSignal.refiningMessage || 'Question answer recorded. Additional adaptive questions added.',
           });
         }
       }
@@ -1210,18 +1306,18 @@ const answerAdaptiveQuestion = async (req, res, next) => {
         });
       }
 
+      const prefetchedQuestion = prefetchNextQuestion({ session });
       await session.save();
 
       return sendSuccess(res, {
         data: {
           session: toPublicSession(session),
           question: toPublicQuestion(session),
+          prefetchedQuestion,
           completedQuestionnaire: false,
           adaptiveConfidence: Number(stopSignal.confidence || 0),
         },
-        message: existingAnswer
-          ? 'Question answer already recorded. Returning next question.'
-          : 'Question answer recorded successfully',
+        message: 'Question answer recorded successfully',
       });
     }
 
@@ -1558,6 +1654,7 @@ module.exports = {
   uploadCv,
   startAdaptiveAssessment,
   getCurrentQuestion,
+  getPreviousQuestion,
   answerAdaptiveQuestion,
   getAssessmentResult,
   downloadAssessmentResultPdf,

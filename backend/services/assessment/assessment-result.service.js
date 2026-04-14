@@ -135,7 +135,11 @@ const averageScoreByIntent = ({ answers = [], questionPlan = [], intents = [] })
   const matched = (Array.isArray(answers) ? answers : []).filter((answer) => {
     const question = byQuestionId.get(answer.questionId);
     const intent = String(question?.intent || answer?.metadata?.intent || '').toLowerCase();
-    return targetIntents.has(intent);
+    if (targetIntents.has(intent)) {
+      return true;
+    }
+
+    return Array.from(targetIntents).some((token) => intent.includes(token));
   });
 
   if (!matched.length) {
@@ -423,6 +427,9 @@ const persistAssessmentResult = async ({
     },
     personality: {
       traits: traitScores,
+      traitZScores: personalityProfile.trait_z_scores || {},
+      traitZNormalized: personalityProfile.trait_z_normalized || {},
+      traitPreZScores: personalityProfile.trait_pre_z_scores || {},
       cognitiveScores,
       oceanNormalized: personalityProfile.ocean_normalized || {},
       oceanCounts: personalityProfile.ocean_counts || {},

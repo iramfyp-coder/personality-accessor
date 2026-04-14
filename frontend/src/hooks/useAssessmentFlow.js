@@ -4,6 +4,7 @@ import {
   askCareerChat,
   getActiveFlowSession,
   getAdaptiveQuestion,
+  getPreviousAdaptiveQuestion,
   getAssessmentFlowResult,
   getFlowSession,
   startAdaptiveAssessment,
@@ -92,15 +93,48 @@ export const useSubmitAdaptiveAnswerMutation = () => {
         return;
       }
 
-      queryClient.invalidateQueries({
-        queryKey: assessmentFlowKeys.question(sessionId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: assessmentFlowKeys.session(sessionId),
-      });
+      if (data?.question || data?.session) {
+        queryClient.setQueryData(assessmentFlowKeys.question(sessionId), data);
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: assessmentFlowKeys.question(sessionId),
+        });
+      }
+
+      if (data?.session) {
+        queryClient.setQueryData(assessmentFlowKeys.session(sessionId), data);
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: assessmentFlowKeys.session(sessionId),
+        });
+      }
+
       queryClient.invalidateQueries({
         queryKey: assessmentFlowKeys.result(sessionId),
       });
+      queryClient.invalidateQueries({ queryKey: assessmentFlowKeys.active });
+    },
+  });
+};
+
+export const usePreviousAdaptiveQuestionMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: getPreviousAdaptiveQuestion,
+    onSuccess: (data, sessionId) => {
+      if (!sessionId) {
+        return;
+      }
+
+      queryClient.setQueryData(assessmentFlowKeys.question(sessionId), data);
+      if (data?.session) {
+        queryClient.setQueryData(assessmentFlowKeys.session(sessionId), data);
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: assessmentFlowKeys.session(sessionId),
+        });
+      }
       queryClient.invalidateQueries({ queryKey: assessmentFlowKeys.active });
     },
   });
