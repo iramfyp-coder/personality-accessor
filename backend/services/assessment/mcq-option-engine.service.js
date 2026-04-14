@@ -2,70 +2,204 @@ const crypto = require('crypto');
 
 const OPTION_IDS = ['A', 'B', 'C', 'D'];
 const OPTION_WEIGHTS = [5, 4, 3, 2];
-const OPTION_ROLES = ['action', 'analysis', 'collaboration', 'delay'];
-const SIMILARITY_THRESHOLD = 0.82;
+const OPTION_ROLES = ['direct_action', 'analytical_check', 'collaborative_route', 'defer_route'];
+const SIMILARITY_THRESHOLD = 0.78;
 
-const GENERIC_PATTERNS = [/^agree$/i, /^disagree$/i, /^neutral$/i, /^yes$/i, /^no$/i, /^maybe$/i];
+const ROLE_TRAIT_HINTS = {
+  direct_action: 'E',
+  analytical_check: 'C',
+  collaborative_route: 'A',
+  defer_route: 'N',
+};
 
-const FAMILY_TEMPLATES = {
+const FAMILY_OPTION_BANK = {
   leadership: {
-    action: 'Set direction immediately and assign one clear owner',
-    analysis: 'Review team constraints first, then select one direction',
-    collaboration: 'Ask everyone for input, then decide together',
-    delay: 'Postpone the decision until someone else leads',
+    direct_action: [
+      'Take initiative and set a clear direction',
+      'Step forward immediately and assign ownership',
+      'Lead the response and define next actions',
+    ],
+    analytical_check: [
+      'Review constraints, then decide the leadership approach',
+      'Assess team capacity first, then set direction',
+      'Validate priority risks before assigning roles',
+    ],
+    collaborative_route: [
+      'Consult the team, then align on one plan',
+      'Facilitate input from key members before committing',
+      'Build quick consensus before execution starts',
+    ],
+    defer_route: [
+      'Wait for clearer authority before acting',
+      'Hold action until expectations are confirmed',
+      'Pause leadership move until direction is explicit',
+    ],
   },
-  decision: {
-    action: 'Choose the strongest option now and execute the first step',
-    analysis: 'Compare evidence first, then choose one clear option',
-    collaboration: 'Discuss tradeoffs with the team before deciding',
-    delay: 'Delay the choice until more certainty appears',
-  },
-  creativity: {
-    action: 'Try a small new approach immediately',
-    analysis: 'Evaluate current method limits before changing',
-    collaboration: 'Brainstorm options with teammates before acting',
-    delay: 'Stay with current method and postpone experimentation',
+  engineering: {
+    direct_action: [
+      'Debug the system immediately and isolate the fault',
+      'Start hands-on troubleshooting right away',
+      'Implement a quick technical fix to stabilize behavior',
+    ],
+    analytical_check: [
+      'Recalculate critical values before changing implementation',
+      'Inspect logs and evidence before touching the system',
+      'Validate assumptions against measurable data first',
+    ],
+    collaborative_route: [
+      'Consult documentation and relevant teammates before acting',
+      'Pair with another engineer to review root cause options',
+      'Run a quick technical sync before selecting a fix path',
+    ],
+    defer_route: [
+      'Observe system behavior longer before intervening',
+      'Delay changes until reproducible evidence is stronger',
+      'Wait for full clarity before making technical changes',
+    ],
   },
   risk: {
-    action: 'Take a controlled risk now with clear safeguards',
-    analysis: 'Assess downside first before moving',
-    collaboration: 'Review risk with the team before committing',
-    delay: 'Wait for stronger certainty before taking action',
+    direct_action: [
+      'Take a controlled risk now with safeguards',
+      'Launch a small pilot immediately',
+      'Move forward with a bounded high-upside step',
+    ],
+    analytical_check: [
+      'Estimate downside and mitigation before deciding',
+      'Model risk scenarios first, then commit',
+      'Quantify failure impact before moving',
+    ],
+    collaborative_route: [
+      'Discuss risk tradeoffs with stakeholders first',
+      'Validate risk appetite with the team before execution',
+      'Align with partners on risk controls before action',
+    ],
+    defer_route: [
+      'Wait until uncertainty drops before acting',
+      'Delay the decision for stronger confidence',
+      'Hold the move until downside is clearer',
+    ],
   },
-  team: {
-    action: 'Resolve it now with a clear team decision',
-    analysis: 'Clarify each role first, then decide',
-    collaboration: 'Facilitate group discussion before acting',
-    delay: 'Pause the decision and revisit later',
+  creativity: {
+    direct_action: [
+      'Prototype a new approach immediately',
+      'Try an unconventional solution right away',
+      'Launch a fast creative experiment now',
+    ],
+    analytical_check: [
+      'Compare alternatives before changing the approach',
+      'Map constraints first, then design a novel option',
+      'Evaluate why the current method is failing before ideating',
+    ],
+    collaborative_route: [
+      'Brainstorm with peers before picking one concept',
+      'Co-create options with the team before execution',
+      'Collect creative input from others before deciding',
+    ],
+    defer_route: [
+      'Keep the current method until stronger evidence appears',
+      'Delay experimentation and stay with routine for now',
+      'Postpone creative changes until pressure drops',
+    ],
   },
-  adaptability: {
-    action: 'Adjust the plan immediately and move forward',
-    analysis: 'Map impacts first, then change the plan',
-    collaboration: 'Align everyone on changes before acting',
-    delay: 'Keep current plan and delay adjustments',
-  },
-  analytical: {
-    action: 'Decide now using the strongest available signal',
-    analysis: 'Validate assumptions first and then decide',
-    collaboration: 'Review interpretations with others before choosing',
-    delay: 'Hold the decision until cleaner data arrives',
+  teamwork: {
+    direct_action: [
+      'Resolve the conflict directly and set one plan',
+      'Make a clear call now to unblock the team',
+      'Define roles immediately to restore momentum',
+    ],
+    analytical_check: [
+      'Clarify responsibilities before deciding next steps',
+      'Analyze friction points first, then assign actions',
+      'Review dependencies before issuing direction',
+    ],
+    collaborative_route: [
+      'Invite discussion and decide together',
+      'Seek team input first, then lock the decision',
+      'Facilitate alignment before execution starts',
+    ],
+    defer_route: [
+      'Wait for tensions to settle before deciding',
+      'Pause and revisit the issue later',
+      'Hold the decision until everyone is ready',
+    ],
   },
   communication: {
-    action: 'Respond directly now and set next steps',
-    analysis: 'Understand concerns first, then respond',
-    collaboration: 'Invite dialogue before deciding your response',
-    delay: 'Delay the response until tension decreases',
+    direct_action: [
+      'Respond clearly now and state next steps',
+      'Address the issue directly in the moment',
+      'Give concise feedback immediately',
+    ],
+    analytical_check: [
+      'Understand concerns first, then respond',
+      'Ask clarifying questions before replying',
+      'Separate facts from assumptions before responding',
+    ],
+    collaborative_route: [
+      'Open dialogue and co-create the response',
+      'Invite perspective from others before final wording',
+      'Align the message with the group before sending',
+    ],
+    defer_route: [
+      'Wait for more context before responding',
+      'Delay the response until emotions cool down',
+      'Postpone communication until clarity improves',
+    ],
+  },
+  decision: {
+    direct_action: [
+      'Choose a direction now and execute the first step',
+      'Commit immediately to the strongest available option',
+      'Make the decision now and move',
+    ],
+    analytical_check: [
+      'Compare evidence before selecting one direction',
+      'Evaluate tradeoffs first, then commit',
+      'Validate assumptions before deciding',
+    ],
+    collaborative_route: [
+      'Discuss tradeoffs with others before choosing',
+      'Collect quick input from the team before commitment',
+      'Align stakeholders before finalizing the decision',
+    ],
+    defer_route: [
+      'Delay the decision until certainty improves',
+      'Wait for additional clarity before acting',
+      'Pause commitment until stronger signals appear',
+    ],
   },
   general: {
-    action: 'Take immediate action with one clear next step',
-    analysis: 'Analyze options first, then commit one direction',
-    collaboration: 'Discuss options with the team before acting',
-    delay: 'Delay action until uncertainty drops',
+    direct_action: [
+      'Take immediate action with one clear step',
+      'Move now with a decisive first action',
+      'Act quickly and commit to one route',
+    ],
+    analytical_check: [
+      'Analyze options first, then choose one route',
+      'Review evidence before acting',
+      'Check assumptions first, then commit',
+    ],
+    collaborative_route: [
+      'Consult others before acting',
+      'Discuss options with the team before committing',
+      'Seek quick alignment before execution',
+    ],
+    defer_route: [
+      'Wait for clearer information before acting',
+      'Delay commitment until uncertainty drops',
+      'Pause action and revisit when clarity improves',
+    ],
   },
 };
 
 const normalizeText = (value = '') =>
   String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const normalizeForSimilarity = (value = '') =>
+  normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -84,13 +218,6 @@ const hashToIndex = (seed = '', size = 1) => {
   const value = Number.parseInt(digest, 16);
   return Number.isFinite(value) ? value % size : 0;
 };
-
-const normalizeForSimilarity = (value = '') =>
-  normalizeText(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 
 const cosineSimilarity = (left = '', right = '') => {
   const toVector = (text = '') =>
@@ -139,14 +266,16 @@ const cosineSimilarity = (left = '', right = '') => {
 const inferIntentFamily = ({ intentTag = '', questionText = '', traitFocus = '' } = {}) => {
   const token = `${toSlug(intentTag)} ${normalizeText(questionText).toLowerCase()} ${String(traitFocus || '').toLowerCase()}`;
 
-  if (/leader|assertive|direction/.test(token)) return 'leadership';
+  if (/engineer|system|debug|code|algorithm|documentation|electrical|power|control|automation|embedded/.test(token)) {
+    return 'engineering';
+  }
+
+  if (/leader|assertive|direction|ownership/.test(token)) return 'leadership';
   if (/decision|tradeoff|priority|confidence/.test(token)) return 'decision';
-  if (/creativ|innovat|novel/.test(token)) return 'creativity';
+  if (/creativ|innovat|novel|experiment/.test(token)) return 'creativity';
   if (/risk|uncertain|stress|pressure/.test(token)) return 'risk';
-  if (/team|cooperat|empathy|trust/.test(token)) return 'team';
-  if (/adapt|change|pivot/.test(token)) return 'adaptability';
-  if (/analysis|data|evidence|logic/.test(token)) return 'analytical';
-  if (/communicat|feedback|conflict/.test(token)) return 'communication';
+  if (/team|cooperat|empathy|trust|conflict/.test(token)) return 'teamwork';
+  if (/communicat|feedback|dialogue|message/.test(token)) return 'communication';
   return 'general';
 };
 
@@ -165,7 +294,8 @@ const extractContextToken = (questionText = '') => {
     'meeting',
     'decision',
     'system',
-    'campaign',
+    'incident',
+    'client',
   ];
 
   return tokens.find((token) => lower.includes(token)) || '';
@@ -181,84 +311,66 @@ const injectContext = (label = '', contextToken = '') => {
     return clean;
   }
 
-  return `${clean} around ${contextToken}`;
+  return `${clean} in this ${contextToken} situation`;
+};
+
+const pickVariant = (items = [], seed = '') => {
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!list.length) {
+    return '';
+  }
+
+  return list[hashToIndex(seed, list.length)] || list[0];
 };
 
 const buildLabelsByRole = ({ family = 'general', contextToken = '', seed = '' }) => {
-  const templates = FAMILY_TEMPLATES[family] || FAMILY_TEMPLATES.general;
-  const contextVariant = hashToIndex(seed, 3);
-  const contextHint =
-    contextVariant === 0
-      ? ''
-      : contextVariant === 1
-      ? contextToken
-      : contextToken
-      ? `under ${contextToken} pressure`
-      : '';
+  const templates = FAMILY_OPTION_BANK[family] || FAMILY_OPTION_BANK.general;
 
-  return OPTION_ROLES.map((role) => ({
-    role,
-    label: injectContext(`${templates[role]} ${contextHint}`.trim(), contextToken),
-  }));
-};
-
-const buildFallbackOptions = (contextToken = '') => {
-  const suffixByRole = {
-    action: 'using immediate action',
-    analysis: 'using quick analysis',
-    collaboration: 'with team collaboration',
-    delay: 'with delayed commitment',
-  };
-
-  return OPTION_ROLES.map((role) => ({
-    role,
-    label: injectContext(
-      `${FAMILY_TEMPLATES.general[role]} ${suffixByRole[role] || ''}`.trim(),
-      contextToken
-    ),
-  }));
-};
-
-const ensureRoleLabelDiversity = ({ items = [], contextToken = '' }) => {
-  const byRole = OPTION_ROLES.map((role) => {
-    const candidate = items.find((entry) => entry.role === role);
+  return OPTION_ROLES.map((role) => {
+    const label = pickVariant(templates[role] || [], `${seed}:${family}:${role}`);
     return {
       role,
-      label: normalizeText(candidate?.label || ''),
+      label: injectContext(label, contextToken),
+      trait: ROLE_TRAIT_HINTS[role] || 'O',
     };
   });
+};
 
-  const diversified = [];
+const ensureRoleLabelDiversity = ({ items = [] }) => {
+  const normalized = [];
 
-  byRole.forEach((entry) => {
-    let label = entry.label;
-    if (!label || GENERIC_PATTERNS.some((pattern) => pattern.test(label))) {
-      label = buildFallbackOptions(contextToken).find((item) => item.role === entry.role)?.label || '';
+  OPTION_ROLES.forEach((role) => {
+    const candidate = items.find((entry) => entry.role === role) || {
+      role,
+      label: pickVariant(FAMILY_OPTION_BANK.general[role], role),
+      trait: ROLE_TRAIT_HINTS[role] || 'O',
+    };
+
+    let label = normalizeText(candidate.label);
+    if (!label) {
+      label = pickVariant(FAMILY_OPTION_BANK.general[role], role);
     }
 
-    const similarIndex = diversified.findIndex(
+    const duplicateIndex = normalized.findIndex(
       (existing) => cosineSimilarity(existing.label, label) >= SIMILARITY_THRESHOLD
     );
 
-    if (similarIndex >= 0) {
-      const roleHint =
-        entry.role === 'action'
-          ? 'using direct action'
-          : entry.role === 'analysis'
-          ? 'after checking evidence'
-          : entry.role === 'collaboration'
-          ? 'with team discussion'
-          : 'after waiting for clarity';
-      label = `${label} ${roleHint}`;
+    if (duplicateIndex >= 0) {
+      const fallback = pickVariant(
+        FAMILY_OPTION_BANK.general[role],
+        `${role}:${duplicateIndex}:${label}`
+      );
+      label = normalizeText(`${label}; alternatively ${fallback}`);
     }
 
-    diversified.push({
-      role: entry.role,
-      label: normalizeText(label),
+    normalized.push({
+      role,
+      label,
+      trait: candidate.trait || ROLE_TRAIT_HINTS[role] || 'O',
     });
   });
 
-  return diversified;
+  return normalized;
 };
 
 const generateMcqOptions = ({
@@ -269,11 +381,10 @@ const generateMcqOptions = ({
 } = {}) => {
   const family = inferIntentFamily({ intentTag, questionText, traitFocus });
   const contextToken = extractContextToken(questionText);
-  const seed = `${intentTag}|${questionText}|${questionType}|${traitFocus}`;
+  const seed = `${intentTag}|${questionText}|${questionType}|${traitFocus}|${family}`;
 
   const roleItems = ensureRoleLabelDiversity({
     items: buildLabelsByRole({ family, contextToken, seed }),
-    contextToken,
   });
 
   return roleItems.slice(0, 4).map((item, index) => ({
@@ -281,6 +392,7 @@ const generateMcqOptions = ({
     label: item.label,
     weight: OPTION_WEIGHTS[index] || 3,
     role: item.role,
+    trait: item.trait,
   }));
 };
 

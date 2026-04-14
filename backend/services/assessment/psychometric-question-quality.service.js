@@ -21,6 +21,13 @@ const QUESTION_TYPE_WEIGHTS = {
   preference: 0.09,
 };
 
+const QUESTION_RESPONSE_TYPE_WEIGHTS = {
+  likert: 0.4,
+  mcq: 0.25,
+  scale: 0.2,
+  text: 0.15,
+};
+
 const DIFFICULTY_WEIGHTS = {
   easy: 0.26,
   medium: 0.32,
@@ -700,6 +707,22 @@ const buildWeightedQueue = (total = 1, weights = {}) => {
   return reordered;
 };
 
+const questionTypePlanner = (total = 22) => {
+  const safeTotal = Math.max(1, Number(total || 22));
+  const queue = buildWeightedQueue(safeTotal, QUESTION_RESPONSE_TYPE_WEIGHTS);
+
+  if (queue.length >= safeTotal) {
+    return queue.slice(0, safeTotal);
+  }
+
+  const fallback = ['likert', 'mcq', 'scale', 'text'];
+  while (queue.length < safeTotal) {
+    queue.push(fallback[queue.length % fallback.length]);
+  }
+
+  return queue;
+};
+
 const flattenFacetCatalog = () =>
   Object.entries(OCEAN_TRAIT_FACETS).flatMap(([trait, facets]) =>
     facets.map((facet) => ({
@@ -817,6 +840,7 @@ const buildQuestionCandidate = ({
   facet,
   contextBucket,
   questionType,
+  responseType = 'mcq',
   difficulty,
   cvHints,
   indexSeed,
@@ -901,6 +925,7 @@ const buildQuestionCandidate = ({
     stage: resolveStageFromContext({ intent, contextBucket }),
     contextBucket,
     questionType,
+    responseType,
     difficulty,
     plannerCategory: intent.category || 'personality',
     domainTags: [String(profileVector?.domainCategory || '').toLowerCase()].filter(Boolean),
@@ -1140,6 +1165,15 @@ const reorderByDifficultyCurve = ({ selected = [], targetCount = 22 }) => {
   }
 
   return ordered.slice(0, targetCount);
+};
+
+const applyPlannedResponseTypes = ({ selected = [], targetCount = 22 }) => {
+  const plannedTypes = questionTypePlanner(targetCount);
+
+  return (Array.isArray(selected) ? selected : []).map((item, index) => ({
+    ...item,
+    responseType: plannedTypes[index] || 'mcq',
+  }));
 };
 
 const selectTopQuestions = ({
@@ -1478,16 +1512,21 @@ const selectTopQuestions = ({
     selected,
     targetCount: target,
   });
+  const typed = applyPlannedResponseTypes({
+    selected: reordered,
+    targetCount: target,
+  });
 
   return {
-    selected: reordered,
+    selected: typed,
     diagnostics: {
       counts,
       traitTargets,
       typeTargets: targets.type,
       contextTargets: targets.context,
       difficultyTargets: targets.difficulty,
-      selectedCount: reordered.length,
+      responseTypeTargets: buildWeightedCounts(target, QUESTION_RESPONSE_TYPE_WEIGHTS),
+      selectedCount: typed.length,
       candidateCount: candidates.length,
     },
   };
@@ -1505,18 +1544,30 @@ const normalizeToQuestionPlanItem = ({
     .digest('hex')
     .slice(0, 8)}`;
 
-  const options = generateMcqOptions({
-    questionText: item.text,
-    intentTag: item.intentTag,
-    questionType: item.questionType,
-    traitFocus: item.traitFocus,
-  });
+  const responseType = ['likert', 'mcq', 'scale', 'text'].includes(String(item.responseType || '').toLowerCase())
+    ? String(item.responseType).toLowerCase()
+    : 'mcq';
+
+  const options =
+    responseType === 'mcq'
+      ? generateMcqOptions({
+          questionText: item.text,
+          intentTag: item.intentTag,
+          questionType: item.questionType,
+          traitFocus: item.traitFocus,
+        })
+      : [];
+
+  const scoringType =
+    item.contextBucket === 'cognitive_scenario' || item.questionType === 'tradeoff'
+      ? 'cognitive_signal'
+      : 'behavior_signal';
 
   return {
     id,
     questionId: id,
-    text: item.text,
-    type: 'mcq',
+    text: toCleanText(item.text),
+    type: responseType,
     category: item.category || 'personality',
     plannerCategory: item.plannerCategory || item.category || 'personality',
     trait: item.traitTarget,
@@ -1525,26 +1576,39 @@ const normalizeToQuestionPlanItem = ({
     difficulty: item.difficulty || 'medium',
     activeDifficulty: item.difficulty || 'medium',
     options,
-    scaleMin: null,
-    scaleMax: null,
-    expectedAnswer: 'A',
+    scaleMin: responseType === 'scale' ? 1 : responseType === 'likert' ? 1 : null,
+    scaleMax: responseType === 'scale' ? 10 : responseType === 'likert' ? 5 : null,
+    expectedAnswer: responseType === 'mcq' ? 'A' : responseType === 'text' ? '' : 3,
     intent: item.baseIntent,
     intentTag: item.intentTag,
     source: 'psychometric_phase7',
-    answerFormat: 'choice',
-    scoringType:
-      item.contextBucket === 'cognitive_scenario' || item.questionType === 'tradeoff'
-        ? 'cognitive_signal'
-        : 'behavior_signal',
+    answerFormat:
+      responseType === 'likert'
+        ? 'rating'
+        : responseType === 'scale'
+        ? 'slider'
+        : responseType === 'text'
+        ? 'text_long'
+        : 'choice',
+    scoringType: responseType === 'text' ? 'ai_analysis' : scoringType,
     theme: item.theme || 'personal',
     stage: item.stage || 'personality',
-    uiHint: 'Situation first. Choose the action you would actually take.',
-    expectedLength: 0,
+    uiHint:
+      responseType === 'text'
+        ? 'Describe your real decision process clearly and specifically.'
+        : responseType === 'likert'
+        ? 'Select how strongly this matches your real behavior.'
+        : responseType === 'scale'
+        ? 'Use the slider to reflect your real tendency in this scenario.'
+        : 'Situation first. Choose the action you would actually take.',
+    expectedLength: responseType === 'text' ? 70 : 0,
+    expectsExample: false,
     contextBucket: item.contextBucket || 'personality_general',
     memorySignature: toQuestionSignature(item.text),
     domainTags: Array.isArray(item.domainTags) ? item.domainTags : [],
     skillTags: Array.isArray(item.skillTags) ? item.skillTags : [],
     order: baseIndex + order,
+    questionType: item.questionType || 'decision',
   };
 };
 
@@ -1577,35 +1641,49 @@ const buildPsychometricQuestionPlan = ({
     })
   );
 
+  const backupTypePlan = questionTypePlanner(candidatePool.length);
+
   const questionPoolBackup = candidatePool.map((candidate, index) => ({
     questionId: `candidate_${baseIndex}_${index + 1}`,
     text: candidate.text,
-    type: 'mcq',
+    type: backupTypePlan[index] || 'mcq',
     category: candidate.category,
     trait: candidate.traitTarget,
     traitFocus: candidate.traitFocus,
     traitTarget: candidate.traitTarget,
     difficulty: candidate.difficulty,
     activeDifficulty: candidate.difficulty,
-    answerFormat: 'choice',
+    answerFormat:
+      (backupTypePlan[index] || 'mcq') === 'likert'
+        ? 'rating'
+        : (backupTypePlan[index] || 'mcq') === 'scale'
+        ? 'slider'
+        : (backupTypePlan[index] || 'mcq') === 'text'
+        ? 'text_long'
+        : 'choice',
     scoringType:
-      candidate.contextBucket === 'cognitive_scenario' || candidate.questionType === 'tradeoff'
+      (backupTypePlan[index] || 'mcq') === 'text'
+        ? 'ai_analysis'
+        : candidate.contextBucket === 'cognitive_scenario' || candidate.questionType === 'tradeoff'
         ? 'cognitive_signal'
         : 'behavior_signal',
     stage: candidate.stage,
     theme: candidate.theme,
     contextBucket: candidate.contextBucket,
     uiHint: 'Situation first. Choose the action you would actually take.',
-    expectedLength: 0,
-    options: generateMcqOptions({
-      questionText: candidate.text,
-      intentTag: candidate.intentTag,
-      questionType: candidate.questionType,
-      traitFocus: candidate.traitFocus,
-    }),
-    scaleMin: null,
-    scaleMax: null,
-    expectedAnswer: 'A',
+    expectedLength: (backupTypePlan[index] || 'mcq') === 'text' ? 70 : 0,
+    options:
+      (backupTypePlan[index] || 'mcq') === 'mcq'
+        ? generateMcqOptions({
+            questionText: candidate.text,
+            intentTag: candidate.intentTag,
+            questionType: candidate.questionType,
+            traitFocus: candidate.traitFocus,
+          })
+        : [],
+    scaleMin: (backupTypePlan[index] || 'mcq') === 'scale' ? 1 : (backupTypePlan[index] || 'mcq') === 'likert' ? 1 : null,
+    scaleMax: (backupTypePlan[index] || 'mcq') === 'scale' ? 10 : (backupTypePlan[index] || 'mcq') === 'likert' ? 5 : null,
+    expectedAnswer: (backupTypePlan[index] || 'mcq') === 'mcq' ? 'A' : 3,
     intent: candidate.baseIntent,
     intentTag: candidate.intentTag,
     signature: candidate.signature,
@@ -1620,7 +1698,8 @@ const buildPsychometricQuestionPlan = ({
     diagnostics: {
       ...selection.diagnostics,
       selectedIntentCount: new Set(questionPlan.map((item) => item.intentTag)).size,
-      questionTypes: countBy(questionPlan, (item) => item.intentTag.split('__')[2] || 'decision'),
+      questionTypes: countBy(questionPlan, (item) => item.type || 'mcq'),
+      decisionStyles: countBy(questionPlan, (item) => item.questionType || 'decision'),
       contextBuckets: countBy(questionPlan, (item) => item.contextBucket || 'personality_general'),
       traitCoverage: countBy(questionPlan, (item) => item.traitFocus || 'O'),
     },
@@ -1629,6 +1708,7 @@ const buildPsychometricQuestionPlan = ({
 
 module.exports = {
   buildPsychometricQuestionPlan,
+  questionTypePlanner,
   SIMILARITY_THRESHOLD,
   QUESTION_LENGTH_MIN,
   QUESTION_LENGTH_MAX,

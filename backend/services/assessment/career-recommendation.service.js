@@ -1,14 +1,15 @@
 const CAREERS_KB = require('../../data/careers.json');
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const round = (value) => Math.round(Number(value) || 0);
 
 const WEIGHTS = {
-  personality: 0.25,
-  skills: 0.2,
-  subjects: 0.1,
-  aptitude: 0.15,
+  personality: 0.3,
+  skills: 0.25,
+  subjects: 0.2,
+  aptitude: 0,
   interests: 0.1,
-  cognitive: 0.15,
+  cognitive: 0.1,
   behavior: 0.05,
 };
 
@@ -28,14 +29,75 @@ const normalizeList = (value = []) =>
     .map((item) => String(item || '').trim())
     .filter(Boolean);
 
-const toNormalizedTokenSet = (items = []) =>
-  new Set(
-    normalizeList(items)
-      .map((item) => item.toLowerCase())
-      .map((item) => item.replace(/[^a-z0-9\s]/g, ' '))
-      .map((item) => item.replace(/\s+/g, ' ').trim())
-      .filter(Boolean)
-  );
+const TOKEN_ALIASES = {
+  javascript: ['js'],
+  'node js': ['node', 'node.js'],
+  typescript: ['ts'],
+  react: ['reactjs'],
+  docker: ['containerization', 'containers'],
+  kubernetes: ['k8s'],
+  'machine learning': ['ml'],
+  'data analysis': ['analytics', 'analysis'],
+  'system design': ['architecture'],
+  'power systems': ['power system', 'electrical power', 'grid systems'],
+  'electrical engineering': ['electrical engineer', 'ee'],
+  electronics: ['electronic systems'],
+  'control systems': ['control engineering', 'control system'],
+  automation: ['industrial automation', 'automation systems'],
+  embedded: ['embedded systems', 'firmware', 'microcontroller'],
+  plc: ['programmable logic controller'],
+  matlab: ['simulink'],
+  requirements: ['requirements gathering', 'business requirements'],
+  business: ['business analysis', 'operations'],
+};
+
+const normalizeToken = (value = '') =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const expandToken = (token = '') => {
+  const normalized = normalizeToken(token);
+  if (!normalized) {
+    return [];
+  }
+
+  const expanded = new Set([normalized]);
+  Object.entries(TOKEN_ALIASES).forEach(([canonical, aliases]) => {
+    const aliasList = [canonical, ...(Array.isArray(aliases) ? aliases : [])].map((item) =>
+      normalizeToken(item)
+    );
+    if (aliasList.includes(normalized)) {
+      aliasList.forEach((item) => expanded.add(item));
+    }
+  });
+
+  return Array.from(expanded);
+};
+
+const toNormalizedTokenSet = (items = []) => {
+  const set = new Set();
+
+  normalizeList(items).forEach((item) => {
+    const normalized = normalizeToken(item);
+    if (!normalized) {
+      return;
+    }
+
+    set.add(normalized);
+    normalized.split(' ').forEach((token) => {
+      if (token.trim()) {
+        set.add(token.trim());
+      }
+    });
+
+    expandToken(normalized).forEach((token) => set.add(token));
+  });
+
+  return set;
+};
 
 const toCareerCatalog = () =>
   Object.entries(CAREERS_KB || {})
@@ -113,8 +175,12 @@ const scoreKeywordOverlap = ({ profileValues = [], targetValues = [] }) => {
   const left = toNormalizedTokenSet(profileValues);
   const right = toNormalizedTokenSet(targetValues);
 
-  if (!left.size || !right.size) {
-    return 45;
+  if (!right.size) {
+    return 50;
+  }
+
+  if (!left.size) {
+    return 20;
   }
 
   let hits = 0;
@@ -226,7 +292,7 @@ const inferCareerCluster = (career = {}) => {
     return 'Social';
   }
 
-  if (/engineer|devops|backend|frontend|software/.test(text)) {
+  if (/electrical|power|control|automation|embedded|electronics|engineer|devops|backend|frontend|software/.test(text)) {
     return 'Engineering';
   }
 
@@ -284,7 +350,7 @@ const inferUserCluster = ({ cvData = {}, cognitiveScores = {}, behaviorVector = 
     Social: 0,
   };
 
-  if (/react|node|java|python|kubernetes|devops|backend|frontend|engineering/.test(text)) {
+  if (/electrical|power|electronics|control systems|automation|embedded|react|node|java|python|kubernetes|devops|backend|frontend|engineering/.test(text)) {
     clusterSignals.Engineering += 14;
     clusterSignals.Technology += 10;
   }
@@ -359,7 +425,14 @@ const buildReasoning = ({ career, components = {} }) => {
     .map((item) => `${item.label} (${item.value}%)`)
     .join(', ');
 
-  return `You scored highest on ${topSignals}, which aligns strongly with ${career.title}.`;
+  const penaltyNote =
+    Number(components.skillPenalty || 0) > 0
+      ? ` A skill-gap penalty of ${Number(components.skillPenalty || 0).toFixed(
+          1
+        )} points was applied due to low direct skill overlap.`
+      : '';
+
+  return `You scored highest on ${topSignals}, which aligns strongly with ${career.title}.${penaltyNote}`;
 };
 
 const toStrengthHighlights = ({ components = {} }) => {
@@ -384,8 +457,9 @@ const toSkillGaps = ({ career, profileSkills = [] }) => {
 
   return career.skills
     .filter((skill) => {
-      const normalized = String(skill || '').toLowerCase();
-      return !profileSet.has(normalized);
+      const normalized = normalizeToken(skill);
+      const variants = expandToken(normalized);
+      return !variants.some((variant) => profileSet.has(variant));
     })
     .slice(0, 4);
 };
@@ -474,7 +548,7 @@ const recommendCareers = ({
   const catalog = toCareerCatalog();
   const traitScores = personalityProfile.trait_scores || {};
 
-  const profileSkills = normalizeList((cvData.skills || []).map((skill) => skill.name));
+  const profileSkills = normalizeList((cvData.skills || []).map((skill) => skill?.name || skill));
   const profileSubjects = normalizeList([...(cvData.subjects || []), ...(cvData.education || [])]);
   const profileInterests = normalizeList(cvData.interests || []);
   const aptitudeSignals = computeAptitudeSignals({ answers, questionPlan, cvData });
@@ -528,21 +602,14 @@ const recommendCareers = ({
         personalityMatch * WEIGHTS.personality +
         skillsMatch * WEIGHTS.skills +
         subjectsMatch * WEIGHTS.subjects +
-        aptitudeMatch * WEIGHTS.aptitude +
         interestMatch * WEIGHTS.interests +
         cognitiveMatch * WEIGHTS.cognitive +
         behaviorMatch * WEIGHTS.behavior;
 
-      const score = clamp(Math.round(weightedCore * 0.92 + clusterAffinity * 0.08), 0, 100);
+      const skillPenalty = skillsMatch < 40 ? (1 - skillsMatch / 100) * 20 : 0;
+      const score = clamp(Math.round(weightedCore - skillPenalty), 0, 100);
 
-      const careerScore = Math.round(
-        skillsMatch * 0.32 +
-          subjectsMatch * 0.12 +
-          aptitudeMatch * 0.2 +
-          interestMatch * 0.14 +
-          cognitiveMatch * 0.14 +
-          behaviorMatch * 0.08
-      );
+      const careerScore = score;
 
       const components = {
         personalityMatch,
@@ -552,6 +619,7 @@ const recommendCareers = ({
         interestMatch,
         cognitiveMatch,
         behaviorMatch,
+        skillPenalty,
       };
 
       const strengthHighlights = toStrengthHighlights({ components });
@@ -572,8 +640,9 @@ const recommendCareers = ({
         interest_match: interestMatch,
         cognitive_match: cognitiveMatch,
         behavior_match: behaviorMatch,
+        skill_penalty: Number(skillPenalty.toFixed(2)),
         cluster_affinity: clusterAffinity,
-        response_alignment: aptitudeMatch,
+        response_alignment: Math.round((cognitiveMatch + behaviorMatch) / 2),
         growth_potential: career.growthPotential,
         why_fit: buildReasoning({ career, components }),
         explanation: {
@@ -597,6 +666,8 @@ const recommendCareers = ({
           interests: interestMatch,
           cognitive: cognitiveMatch,
           behavior: behaviorMatch,
+          skillPenalty: Number(skillPenalty.toFixed(2)),
+          weightedCore: round(weightedCore),
         },
       };
     })

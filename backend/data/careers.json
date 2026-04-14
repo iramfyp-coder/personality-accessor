@@ -373,6 +373,176 @@
     ],
     "growthPotential": 91
   },
+  "electrical_engineer": {
+    "title": "Electrical Engineer",
+    "personality": {
+      "O": 64,
+      "C": 82,
+      "E": 44,
+      "A": 50,
+      "N": 30
+    },
+    "skills": [
+      "circuit design",
+      "electrical systems",
+      "power electronics",
+      "matlab",
+      "troubleshooting"
+    ],
+    "subjects": [
+      "electrical engineering",
+      "circuit analysis",
+      "electromagnetics",
+      "power systems"
+    ],
+    "aptitude": {
+      "logical_reasoning": 80,
+      "numerical_reasoning": 78,
+      "verbal_reasoning": 44
+    },
+    "interests": [
+      "electrical systems",
+      "energy",
+      "hardware"
+    ],
+    "growthPotential": 90
+  },
+  "power_systems_engineer": {
+    "title": "Power Systems Engineer",
+    "personality": {
+      "O": 60,
+      "C": 86,
+      "E": 42,
+      "A": 48,
+      "N": 28
+    },
+    "skills": [
+      "power systems",
+      "load flow analysis",
+      "protection systems",
+      "grid operations",
+      "high voltage engineering"
+    ],
+    "subjects": [
+      "power systems",
+      "electrical machines",
+      "control systems",
+      "energy systems"
+    ],
+    "aptitude": {
+      "logical_reasoning": 82,
+      "numerical_reasoning": 80,
+      "verbal_reasoning": 42
+    },
+    "interests": [
+      "energy infrastructure",
+      "grid reliability",
+      "power distribution"
+    ],
+    "growthPotential": 91
+  },
+  "control_systems_engineer": {
+    "title": "Control Systems Engineer",
+    "personality": {
+      "O": 66,
+      "C": 84,
+      "E": 40,
+      "A": 48,
+      "N": 29
+    },
+    "skills": [
+      "control systems",
+      "pid tuning",
+      "system modeling",
+      "matlab simulink",
+      "instrumentation"
+    ],
+    "subjects": [
+      "control engineering",
+      "signals and systems",
+      "electrical engineering",
+      "automation"
+    ],
+    "aptitude": {
+      "logical_reasoning": 84,
+      "numerical_reasoning": 79,
+      "verbal_reasoning": 43
+    },
+    "interests": [
+      "automation",
+      "system stability",
+      "industrial control"
+    ],
+    "growthPotential": 90
+  },
+  "automation_engineer": {
+    "title": "Automation Engineer",
+    "personality": {
+      "O": 62,
+      "C": 82,
+      "E": 46,
+      "A": 50,
+      "N": 31
+    },
+    "skills": [
+      "plc programming",
+      "industrial automation",
+      "scada",
+      "process control",
+      "troubleshooting"
+    ],
+    "subjects": [
+      "automation",
+      "control systems",
+      "instrumentation",
+      "electrical engineering"
+    ],
+    "aptitude": {
+      "logical_reasoning": 80,
+      "numerical_reasoning": 76,
+      "verbal_reasoning": 46
+    },
+    "interests": [
+      "industrial systems",
+      "automation",
+      "process optimization"
+    ],
+    "growthPotential": 89
+  },
+  "embedded_engineer": {
+    "title": "Embedded Engineer",
+    "personality": {
+      "O": 65,
+      "C": 84,
+      "E": 38,
+      "A": 46,
+      "N": 30
+    },
+    "skills": [
+      "embedded systems",
+      "microcontrollers",
+      "c programming",
+      "firmware debugging",
+      "hardware interfacing"
+    ],
+    "subjects": [
+      "embedded systems",
+      "digital electronics",
+      "computer architecture",
+      "electrical engineering"
+    ],
+    "aptitude": {
+      "logical_reasoning": 83,
+      "numerical_reasoning": 74,
+      "verbal_reasoning": 41
+    },
+    "interests": [
+      "hardware",
+      "embedded development",
+      "real-time systems"
+    ],
+    "growthPotential": 90
+  },
   "business_analyst": {
     "title": "Business Analyst",
     "personality": {

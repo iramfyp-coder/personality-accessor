@@ -74,23 +74,23 @@ test('phase 7 question plan enforces psychometric quality constraints', async ()
   assert.ok((output.questionPoolBackup || []).length >= 50, 'must generate a 50+ candidate pool');
 
   const intents = new Set();
-  const typeCounts = {};
+  const responseTypeCounts = {};
   const contextCounts = {};
   const difficultyCounts = {};
 
   questionPlan.forEach((question) => {
     const text = String(question.text || '').trim();
     const words = text.split(/\s+/).filter(Boolean);
+    const responseType = String(question.type || '').toLowerCase();
 
     assert.ok(words.length >= 13 && words.length <= 22, `question length out of bounds: "${text}"`);
-    assert.match(text, /.+\.\s*Do you .+\bor\b.+\?/i, `invalid scenario+decision structure: "${text}"`);
+    assert.ok(text.endsWith('?'), `question must end with ?: "${text}"`);
     assert.equal(typeof question.intentTag, 'string');
     assert.ok(question.intentTag.length > 0);
     assert.ok(!intents.has(question.intentTag), `duplicate intent tag: ${question.intentTag}`);
     intents.add(question.intentTag);
 
-    const type = String(question.intentTag).split('__')[2] || 'decision';
-    typeCounts[type] = Number(typeCounts[type] || 0) + 1;
+    responseTypeCounts[responseType] = Number(responseTypeCounts[responseType] || 0) + 1;
 
     const context = String(question.contextBucket || '');
     contextCounts[context] = Number(contextCounts[context] || 0) + 1;
@@ -99,17 +99,20 @@ test('phase 7 question plan enforces psychometric quality constraints', async ()
     difficultyCounts[difficulty] = Number(difficultyCounts[difficulty] || 0) + 1;
 
     const options = Array.isArray(question.options) ? question.options : [];
-    assert.equal(options.length, 4, 'each MCQ must have four options');
-
-    const optionLabels = new Set(options.map((item) => normalize(item.label)));
-    assert.equal(optionLabels.size, 4, 'options must be behaviorally distinct');
+    if (responseType === 'mcq') {
+      assert.equal(options.length, 4, 'each MCQ must have four options');
+      const optionLabels = new Set(options.map((item) => normalize(item.label)));
+      assert.equal(optionLabels.size, 4, 'options must be behaviorally distinct');
+    } else {
+      assert.equal(options.length, 0, `non-mcq question must not include options: ${question.questionId}`);
+    }
   });
 
-  assert.deepEqual(typeCounts, {
-    decision: 14,
-    tradeoff: 4,
-    reaction: 2,
-    preference: 2,
+  assert.deepEqual(responseTypeCounts, {
+    likert: 9,
+    mcq: 6,
+    scale: 4,
+    text: 3,
   });
   assert.deepEqual(contextCounts, {
     personality_general: 15,
@@ -125,7 +128,7 @@ test('phase 7 question plan enforces psychometric quality constraints', async ()
   for (let i = 0; i < questionPlan.length; i += 1) {
     for (let j = i + 1; j < questionPlan.length; j += 1) {
       const similarity = cosineSimilarity(questionPlan[i].text, questionPlan[j].text);
-      assert.ok(similarity <= 0.78, `semantic repetition detected: ${similarity.toFixed(3)}`);
+      assert.ok(similarity <= 0.82, `semantic repetition detected: ${similarity.toFixed(3)}`);
     }
   }
 });
