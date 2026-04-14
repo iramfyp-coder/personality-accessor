@@ -18,6 +18,16 @@ const {
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+const FACET_CODES_BY_TRAIT = {
+  O: ['O1', 'O2', 'O3', 'O4', 'O5', 'O6'],
+  C: ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'],
+  E: ['E1', 'E2', 'E3', 'E4', 'E5', 'E6'],
+  A: ['A1', 'A2', 'A3', 'A4', 'A5', 'A6'],
+  N: ['N1', 'N2', 'N3', 'N4', 'N5', 'N6'],
+};
+
+const FACET_OFFSETS = [-12, -6, -2, 3, 8, 12];
+
 const buildTrendVector = (traitScores = {}) => {
   const values = {
     O: Number(traitScores.O || 0),
@@ -32,6 +42,58 @@ const buildTrendVector = (traitScores = {}) => {
   return {
     ...values,
     average: Number(average.toFixed(2)),
+  };
+};
+
+const buildInsightHeatmap = ({ traitScores = {}, cognitiveScores = {}, behaviorVector = {} }) => {
+  const baseTraits = {
+    O: Number(traitScores.O || 0),
+    C: Number(traitScores.C || 0),
+    E: Number(traitScores.E || 0),
+    A: Number(traitScores.A || 0),
+    N: Number(traitScores.N || 0),
+  };
+
+  const traitAdjustments = {
+    O:
+      (Number(cognitiveScores.creative || 50) - 50) * 0.16 +
+      (Number(behaviorVector.risk_tolerance || 50) - 50) * 0.1,
+    C:
+      (Number(cognitiveScores.analytical || 50) - 50) * 0.12 +
+      (Number(cognitiveScores.systematic || 50) - 50) * 0.12 +
+      (Number(cognitiveScores.strategic || 50) - 50) * 0.08,
+    E:
+      (Number(behaviorVector.leadership || 50) - 50) * 0.16 +
+      (Number(behaviorVector.decision_speed || 50) - 50) * 0.1,
+    A:
+      (Number(behaviorVector.team_preference || 50) - 50) * 0.16 +
+      (Number(cognitiveScores.practical || 50) - 50) * 0.08,
+    N:
+      (Number(behaviorVector.stress_tolerance || 50) - 50) * -0.18 +
+      (Number(behaviorVector.risk_tolerance || 50) - 50) * 0.05,
+  };
+
+  const insightHeatmap = Object.entries(baseTraits).map(([trait, value]) => ({
+    trait,
+    value: Math.round(clamp(value + Number(traitAdjustments[trait] || 0), 0, 100)),
+  }));
+
+  const facetScores = insightHeatmap.reduce((accumulator, entry) => {
+    const facetCodes = FACET_CODES_BY_TRAIT[entry.trait] || [];
+    facetCodes.forEach((code, index) => {
+      const modeled = clamp(
+        entry.value + FACET_OFFSETS[index % FACET_OFFSETS.length] + (index % 2 === 0 ? 2 : -1),
+        0,
+        100
+      );
+      accumulator[code] = Math.round(modeled);
+    });
+    return accumulator;
+  }, {});
+
+  return {
+    insightHeatmap,
+    facetScores,
   };
 };
 
@@ -336,6 +398,11 @@ const persistAssessmentResult = async ({
     recommendations: careerOutput.recommendations || [],
     consistencyScore,
   });
+  const heatmapOutput = buildInsightHeatmap({
+    traitScores,
+    cognitiveScores,
+    behaviorVector,
+  });
 
   const stopConfidence = Number(session?.adaptiveMetrics?.questionnaireConfidence || 0);
 
@@ -388,6 +455,8 @@ const persistAssessmentResult = async ({
     },
     analytics: {
       trendVector: buildTrendVector(traitScores),
+      insightHeatmap: heatmapOutput.insightHeatmap,
+      facetScores: heatmapOutput.facetScores,
       confidence: confidenceOutput.confidence,
       confidenceScore: confidenceOutput.confidenceScore,
       confidenceGap: confidenceOutput.confidenceGap,

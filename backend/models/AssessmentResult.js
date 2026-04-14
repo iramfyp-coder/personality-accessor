@@ -137,6 +137,8 @@ const assessmentResultSchema = new mongoose.Schema(
     },
     analytics: {
       trendVector: { type: mongoose.Schema.Types.Mixed, default: {} },
+      insightHeatmap: { type: [mongoose.Schema.Types.Mixed], default: [] },
+      facetScores: { type: mongoose.Schema.Types.Mixed, default: {} },
       confidence: { type: Number, min: 0, max: 1, default: 0 },
       confidenceScore: { type: Number, min: 0, max: 100, default: 0 },
       confidenceGap: { type: Number, min: 0, max: 100, default: 0 },

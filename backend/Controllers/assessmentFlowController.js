@@ -5,6 +5,8 @@ const { createHttpError } = require('../utils/httpError');
 const { analyzeCv } = require('../services/assessment/cvAnalysis.service');
 const {
   generateQuestionPlan,
+  generateSupplementalQuestionPlan,
+  evaluateAdaptiveExtensionNeed,
   adaptUpcomingQuestions,
   computeFatigueMetrics,
   shouldStopAssessmentEarly,
@@ -618,7 +620,7 @@ const finalizeAssessment = async ({ session }) => {
     event: {
       stage: 'result',
       status: 'processing',
-      message: 'Processing personality and career intelligence...',
+      message: 'Building your personality profile...',
     },
   });
 
@@ -670,7 +672,7 @@ const uploadCv = async (req, res, next) => {
       event: {
         stage: 'cv_upload',
         status: 'processing',
-        message: 'Analyzing CV content...',
+        message: 'Analyzing your CV...',
       },
     });
 
@@ -702,6 +704,11 @@ const uploadCv = async (req, res, next) => {
       fatigueDetected: false,
       questionnaireConfidence: 0,
       shouldStopEarly: false,
+      targetQuestionCount: 0,
+      cvComplexity: 0,
+      confidenceExtensionApplied: false,
+      inconsistencyExtensionApplied: false,
+      extensionReasons: [],
       evaluatedAt: new Date(),
     };
     session.currentQuestionIndex = 0;
@@ -785,7 +792,7 @@ const startAdaptiveAssessment = async (req, res, next) => {
       event: {
         stage: 'questionnaire',
         status: 'processing',
-        message: 'Generating adaptive question set...',
+        message: 'Generating adaptive questions...',
       },
     });
 
@@ -853,6 +860,11 @@ const startAdaptiveAssessment = async (req, res, next) => {
       questionnaireConfidence: 0,
       shouldStopEarly: false,
       consistencyScore: 0,
+      targetQuestionCount: Number(questionOutput.targetQuestionCount || session.questionPlan.length || 0),
+      cvComplexity: Number(questionOutput.cvComplexity || 0),
+      confidenceExtensionApplied: false,
+      inconsistencyExtensionApplied: false,
+      extensionReasons: [],
       evaluatedAt: new Date(),
     };
     session.status = 'in_progress';
@@ -1054,6 +1066,113 @@ const answerAdaptiveQuestion = async (req, res, next) => {
       session.lastActiveAt = new Date();
 
       const reachedEnd = session.currentQuestionIndex >= (session.questionPlan || []).length;
+      const extensionSignal = reachedEnd
+        ? evaluateAdaptiveExtensionNeed({ session })
+        : { extraQuestions: 0, reasons: [], confidence: 0, inconsistency: { inconsistencyScore: 0 } };
+
+      if (reachedEnd && extensionSignal.extraQuestions > 0) {
+        await appendProgressEvent({
+          session,
+          event: {
+            stage: 'questionnaire',
+            status: 'processing',
+            message: 'Extending questionnaire for confidence and consistency calibration...',
+            meta: {
+              extraQuestions: extensionSignal.extraQuestions,
+              reasons: extensionSignal.reasons,
+            },
+          },
+        });
+
+        const supplemental = await generateSupplementalQuestionPlan({
+          cvData: session.cvData || {},
+          askedQuestions: session.askedQuestions || [],
+          existingQuestionPlan: session.questionPlan || [],
+          additionalCount: extensionSignal.extraQuestions,
+        });
+
+        if (supplemental.length > 0) {
+          session.questionPlan = [...(session.questionPlan || []), ...supplemental];
+          session.questionPoolBackup = [
+            ...(Array.isArray(session.questionPoolBackup) ? session.questionPoolBackup : []),
+            ...supplemental.map((question) => ({
+              id: question.id,
+              questionId: question.questionId,
+              text: question.text,
+              type: question.type,
+              category: question.category,
+              trait: question.trait,
+              difficulty: question.difficulty,
+              answerFormat: question.answerFormat,
+              scoringType: question.scoringType,
+              stage: question.stage,
+              theme: question.theme,
+              contextBucket: question.contextBucket,
+              uiHint: question.uiHint,
+              expectedLength: question.expectedLength,
+              options: question.options,
+              scaleMin: question.scaleMin,
+              scaleMax: question.scaleMax,
+              expectedAnswer: question.expectedAnswer,
+              intent: question.intent,
+              signature: question.memorySignature,
+            })),
+          ].slice(-240);
+
+          const nextExtensionReasons = Array.from(
+            new Set([
+              ...(Array.isArray(session.adaptiveMetrics?.extensionReasons)
+                ? session.adaptiveMetrics.extensionReasons
+                : []),
+              ...extensionSignal.reasons,
+            ])
+          );
+
+          session.adaptiveMetrics = {
+            ...(session.adaptiveMetrics || {}),
+            questionnaireConfidence: Number(extensionSignal.confidence || 0),
+            consistencyScore: Number(extensionSignal.inconsistency?.inconsistencyScore || 0),
+            targetQuestionCount: session.questionPlan.length,
+            confidenceExtensionApplied:
+              Boolean(session.adaptiveMetrics?.confidenceExtensionApplied) ||
+              extensionSignal.reasons.includes('low_confidence'),
+            inconsistencyExtensionApplied:
+              Boolean(session.adaptiveMetrics?.inconsistencyExtensionApplied) ||
+              extensionSignal.reasons.includes('inconsistent_answers'),
+            extensionReasons: nextExtensionReasons,
+            shouldStopEarly: false,
+            evaluatedAt: new Date(),
+          };
+
+          await session.save();
+
+          await appendProgressEvent({
+            session,
+            event: {
+              stage: 'questionnaire',
+              status: 'completed',
+              message: `Questionnaire extended by ${supplemental.length} questions for deeper confidence.`,
+              meta: {
+                totalQuestions: session.questionPlan.length,
+                reasons: extensionSignal.reasons,
+              },
+            },
+          });
+
+          return sendSuccess(res, {
+            data: {
+              session: toPublicSession(session),
+              question: toPublicQuestion(session),
+              completedQuestionnaire: false,
+              adaptiveConfidence: Number(extensionSignal.confidence || 0),
+              extensionApplied: true,
+              extensionReasons: extensionSignal.reasons,
+            },
+            message: 'Question answer recorded. Additional adaptive questions added for higher confidence.',
+          });
+        }
+      }
+
       const stopSignal = shouldStopAssessmentEarly({ session });
       session.adaptiveMetrics = {
         ...(session.adaptiveMetrics || {}),
@@ -1064,6 +1183,8 @@ const answerAdaptiveQuestion = async (req, res, next) => {
         ),
         questionnaireConfidence: Number(stopSignal.confidence || 0),
         shouldStopEarly: Boolean(stopSignal.shouldStop),
+        consistencyScore: Number(extensionSignal.inconsistency?.inconsistencyScore || session.adaptiveMetrics?.consistencyScore || 0),
+        targetQuestionCount: Number(session.questionPlan?.length || session.adaptiveMetrics?.targetQuestionCount || 0),
         evaluatedAt: new Date(),
       };
       const shouldFinalize = reachedEnd || stopSignal.shouldStop;

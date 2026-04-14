@@ -246,6 +246,9 @@ const ResultPage = () => {
               <Link className="history-item__link" to="/dashboard">
                 Back to Dashboard
               </Link>
+              <Button variant="ghost" onClick={() => navigate('/assessment/start')}>
+                Retake Assessment
+              </Button>
             </div>
           </FadeIn>
         </header>

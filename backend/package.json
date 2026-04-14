@@ -12,7 +12,9 @@
     "seed:questions": "node scripts/seedQuestions.js",
     "migrate:assessment-results": "node scripts/migrateAssessmentsToAssessmentResults.js",
     "test:assessment-flow": "node scripts/testAssessmentFlow.js",
-    "train:career-ml": "node scripts/trainCareerRandomForest.js"
+    "train:career-ml": "node scripts/trainCareerRandomForest.js",
+    "assets:assessment-images:download": "node scripts/downloadQuestionImages.js",
+    "assets:assessment-images:upload": "node scripts/uploadQuestionImagesToCloudinary.js"
   },
   "keywords": [],
   "author": "",
@@ -39,7 +41,8 @@
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
     "openai": "^6.34.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "sharp": "^0.34.4"
   },
   "devDependencies": {
     "eslint": "^8.57.1",

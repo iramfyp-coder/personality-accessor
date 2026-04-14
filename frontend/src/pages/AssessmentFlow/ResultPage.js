@@ -1,16 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useReducedMotion } from 'framer-motion';
-import { FiAward, FiCpu, FiDownload, FiSend, FiTrendingUp, FiUser } from 'react-icons/fi';
+import {
+  FiArrowLeft,
+  FiAward,
+  FiCpu,
+  FiDownload,
+  FiRefreshCw,
+  FiSend,
+  FiTrendingUp,
+  FiUser,
+} from 'react-icons/fi';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Skeleton from '../../components/ui/Skeleton';
 import Loader from '../../components/ui/Loader';
+import LoaderOverlay from '../../components/ui/LoaderOverlay';
 import TraitRadarChart from '../../components/charts/TraitRadarChart';
 import CareerAlignmentChart from '../../components/charts/CareerAlignmentChart';
 import MetricBarChart from '../../components/charts/MetricBarChart';
+import InsightHeatmapChart from '../../components/charts/InsightHeatmapChart';
 import TraitSphere from '../../components/3d/TraitSphere';
 import mapTraitsTo3DData from '../../utils/traitMapper';
 import { normalizeTraits } from '../../utils/traits';
@@ -21,7 +32,7 @@ import {
   useWhyNotCareerMutation,
 } from '../../hooks/useAssessmentFlow';
 import { downloadAssessmentFlowPdf } from '../../api/assessmentFlowApi';
-import { readAssessmentFlowState } from '../../utils/assessmentFlowStorage';
+import { clearAssessmentFlowState, readAssessmentFlowState } from '../../utils/assessmentFlowStorage';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -48,6 +59,12 @@ const QUICK_CHAT_PROMPTS = [
   'Which skill gap blocks my growth most?',
 ];
 
+const toDefaultFollowUps = (topCareer = '') => [
+  `What makes ${topCareer || 'my top role'} stronger than my second match?`,
+  'Give me one scenario to improve leadership and decision quality.',
+  'What should I practice weekly to increase confidence?',
+];
+
 const bandClass = (value = '') => {
   const normalized = String(value || '').toLowerCase();
   if (normalized === 'high') return 'high';
@@ -70,6 +87,7 @@ const AssessmentFlowResultPage = () => {
 
   const [message, setMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
+  const [followUpPrompts, setFollowUpPrompts] = useState(QUICK_CHAT_PROMPTS);
   const [chatError, setChatError] = useState('');
   const [chatTyping, setChatTyping] = useState(false);
   const [pdfError, setPdfError] = useState('');
@@ -79,6 +97,7 @@ const AssessmentFlowResultPage = () => {
 
   const sectionsRef = useRef([]);
   const chatFeedRef = useRef(null);
+  const downloadButtonRef = useRef(null);
 
   const result = resultQuery.data?.result || null;
 
@@ -105,6 +124,47 @@ const AssessmentFlowResultPage = () => {
     ? result.career_recommendations
     : [];
   const contrast = result?.career_contrast || {};
+  const topCareer = recommendations[0] || null;
+  const followUps = useMemo(
+    () => (followUpPrompts.length ? followUpPrompts : toDefaultFollowUps(topCareer?.career || '')),
+    [followUpPrompts, topCareer?.career]
+  );
+
+  const heatmapFacetScores = useMemo(() => {
+    const direct =
+      (result?.facetScores && typeof result.facetScores === 'object' && result.facetScores) ||
+      (result?.facet_scores && typeof result.facet_scores === 'object' && result.facet_scores) ||
+      {};
+
+    if (Object.keys(direct).length > 0) {
+      return direct;
+    }
+
+    const fromInsight = Array.isArray(result?.insightHeatmap)
+      ? result.insightHeatmap
+      : Array.isArray(result?.insight_heatmap)
+      ? result.insight_heatmap
+      : [];
+
+    if (!fromInsight.length) {
+      return {};
+    }
+
+    return fromInsight.reduce((accumulator, entry) => {
+      const trait = String(entry?.trait || '').toUpperCase();
+      const value = Number(entry?.value || 0);
+      if (!trait) {
+        return accumulator;
+      }
+
+      for (let index = 1; index <= 6; index += 1) {
+        accumulator[`${trait}${index}`] = Math.max(0, Math.min(100, Math.round(value + index - 3)));
+      }
+
+      return accumulator;
+    }, {});
+  }, [result]);
+  const hasHeatmapData = Object.keys(heatmapFacetScores).length > 0;
 
   useEffect(() => {
     if (!result || prefersReducedMotion) {
@@ -163,6 +223,22 @@ const AssessmentFlowResultPage = () => {
     };
   }, [result, prefersReducedMotion]);
 
+  useEffect(() => {
+    if (prefersReducedMotion || !downloadButtonRef.current) {
+      return () => {};
+    }
+
+    const tween = gsap.to(downloadButtonRef.current, {
+      boxShadow: '0 0 0 1px rgba(111, 236, 255, 0.35), 0 12px 24px rgba(25, 151, 219, 0.3)',
+      repeat: -1,
+      yoyo: true,
+      duration: 1.2,
+      ease: 'sine.inOut',
+    });
+
+    return () => tween.kill();
+  }, [prefersReducedMotion, result?.meta?.generated_at]);
+
   const submitChat = async (incomingMessage) => {
     const text = String(incomingMessage ?? message ?? '').trim();
 
@@ -190,6 +266,11 @@ const AssessmentFlowResultPage = () => {
         message: text,
       });
       setChatHistory((current) => (Array.isArray(payload.history) ? payload.history : current));
+      setFollowUpPrompts(
+        toDefaultFollowUps(topCareer?.career || 'your best-fit role').map((item, index) =>
+          index === 0 ? item : `${item} (${text.slice(0, 36)}...)`
+        )
+      );
     } catch (error) {
       setChatError(error.message || 'Assistant is unavailable right now.');
       setChatHistory((current) =>
@@ -200,6 +281,15 @@ const AssessmentFlowResultPage = () => {
     } finally {
       setChatTyping(false);
     }
+  };
+
+  const handleBackToDashboard = () => {
+    navigate('/dashboard');
+  };
+
+  const handleRetakeAssessment = () => {
+    clearAssessmentFlowState(auth.userId);
+    navigate('/assessment/start');
   };
 
   const downloadPdf = async () => {
@@ -260,9 +350,10 @@ const AssessmentFlowResultPage = () => {
   if (resultQuery.isPending) {
     return (
       <main className="app-page">
+        <LoaderOverlay visible message="Building your personality profile..." />
         <div className="page-shell">
           <Card title="Generating report">
-            <Loader label="AI is generating your result intelligence..." variant="result" />
+            <Loader label="Building your personality profile..." variant="result" />
             <Skeleton height="36px" />
             <Skeleton height="280px" />
             <Skeleton height="140px" count={2} />
@@ -289,10 +380,10 @@ const AssessmentFlowResultPage = () => {
 
   const confidenceBand = bandClass(result.confidence_band);
   const confidencePercent = Math.max(0, Math.min(100, Math.round(result.confidence_score || 0)));
-  const topCareer = recommendations[0] || null;
 
   return (
     <main className="app-page phase3-result-page">
+      <LoaderOverlay visible={resultQuery.isPending} message="Building your personality profile..." />
       <div className="page-shell result-shell phase3-result-shell">
         <section data-scroll-reveal className="phase3-result-hero phase3-result-section" ref={(node) => { sectionsRef.current[0] = node; }}>
           <div>
@@ -307,6 +398,14 @@ const AssessmentFlowResultPage = () => {
             </div>
           </div>
           <div className="phase3-result-hero__stats">
+            <div className="phase3-result-hero__actions">
+              <Button variant="ghost" onClick={handleBackToDashboard}>
+                <FiArrowLeft /> Back to Dashboard
+              </Button>
+              <Button variant="secondary" onClick={handleRetakeAssessment}>
+                <FiRefreshCw /> Retake Assessment
+              </Button>
+            </div>
             <article className="phase3-hero-stat">
               <p>Top Career Match</p>
               <strong className="phase3-count" data-target={Number(topCareer?.score || 0)}>
@@ -328,9 +427,11 @@ const AssessmentFlowResultPage = () => {
               </strong>
               <span>{String(result.confidence_band || 'low').toUpperCase()}</span>
             </article>
-            <Button variant="ghost" onClick={downloadPdf}>
-              <FiDownload /> Download PDF
-            </Button>
+            <div ref={downloadButtonRef}>
+              <Button variant="ghost" onClick={downloadPdf}>
+                <FiDownload /> Download PDF
+              </Button>
+            </div>
           </div>
         </section>
 
@@ -383,12 +484,25 @@ const AssessmentFlowResultPage = () => {
         </section>
 
         <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[4] = node; }}>
+          <Card title="Insight Heatmap" subtitle="Trait-intensity map for deeper interpretation">
+            {hasHeatmapData ? (
+              <InsightHeatmapChart facetScores={heatmapFacetScores} />
+            ) : (
+              <div className="skeleton-stack">
+                <Skeleton height="220px" />
+                <Skeleton height="20px" />
+              </div>
+            )}
+          </Card>
+        </section>
+
+        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[5] = node; }}>
           <Card title="Career Match Landscape" subtitle="Overall, personality, and career fit">
             <CareerAlignmentChart recommendations={recommendations} />
           </Card>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[5] = node; }}>
+        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[6] = node; }}>
           <Card title="Career Matches" subtitle="Why each role matched and what to build next">
             <div className="phase3-career-grid">
               {recommendations.map((career, index) => (
@@ -419,7 +533,7 @@ const AssessmentFlowResultPage = () => {
           </Card>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[6] = node; }}>
+        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[7] = node; }}>
           <Card title="Career Contrast Engine" subtitle="Why #1 is stronger than #2">
             {contrast?.summary ? (
               <div className="phase3-contrast">
@@ -438,7 +552,7 @@ const AssessmentFlowResultPage = () => {
           </Card>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[7] = node; }}>
+        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[8] = node; }}>
           <Card title="Why Not Engine" subtitle="Compare any target career against your profile">
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'flex', gap: 10 }}>
@@ -470,7 +584,7 @@ const AssessmentFlowResultPage = () => {
           </Card>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[8] = node; }}>
+        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[9] = node; }}>
           <Card title="Learning Roadmap" subtitle="Sequenced growth path">
             <div className="intel-timeline">
               {(result.career_roadmap || []).map((step, index) => (
@@ -485,11 +599,11 @@ const AssessmentFlowResultPage = () => {
           </Card>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[9] = node; }}>
+        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[10] = node; }}>
           <Card title="AI Career Chatbot" subtitle="Ask follow-up questions about your profile">
             <div className="phase4-chat-shell">
               <div className="phase4-chat-suggestions">
-                {QUICK_CHAT_PROMPTS.map((prompt) => (
+                {followUps.map((prompt) => (
                   <button
                     key={prompt}
                     type="button"

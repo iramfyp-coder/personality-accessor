@@ -1,4 +1,12 @@
-const wrapLine = (text = '', width = 94) => {
+const PAGE_WIDTH = 612;
+const PAGE_HEIGHT = 792;
+const PAGE_MARGIN = 46;
+const TOP_MARGIN = PAGE_HEIGHT - PAGE_MARGIN;
+const DEFAULT_WRAP_WIDTH = 94;
+const lineHeight = 14;
+const sectionSpacing = 28;
+
+const wrapLine = (text = '', width = DEFAULT_WRAP_WIDTH) => {
   const words = String(text || '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -61,7 +69,7 @@ const toConfidenceLabel = (confidenceBand = '', confidenceGap = 0) => {
   return `HIGH (${gap})`;
 };
 
-const toSectionPages = ({ result }) => {
+const toReportSections = ({ result }) => {
   const cv = result.cv_data || {};
   const careers = Array.isArray(result.career_recommendations) ? result.career_recommendations : [];
   const roadmap = Array.isArray(result.career_roadmap) ? result.career_roadmap : [];
@@ -74,7 +82,7 @@ const toSectionPages = ({ result }) => {
   const consistencyScore = Math.round(Number(result.consistency_score || 0) * 100);
   const narrativeSummary = String(result.narrative_summary || result.behavioral_summary || '').trim();
 
-  const pages = [
+  return [
     {
       title: 'Cover Page',
       lines: [
@@ -101,17 +109,17 @@ const toSectionPages = ({ result }) => {
       ],
     },
     {
-      title: 'OCEAN Graph',
+      title: 'OCEAN',
       lines: [
-        `Openness (O):        [${toBar(ocean.O)}] ${Math.round(Number(ocean.O || 0))}%`,
-        `Conscientiousness(C):[${toBar(ocean.C)}] ${Math.round(Number(ocean.C || 0))}%`,
-        `Extraversion (E):    [${toBar(ocean.E)}] ${Math.round(Number(ocean.E || 0))}%`,
-        `Agreeableness (A):   [${toBar(ocean.A)}] ${Math.round(Number(ocean.A || 0))}%`,
-        `Neuroticism (N):     [${toBar(ocean.N)}] ${Math.round(Number(ocean.N || 0))}%`,
+        `Openness (O):         [${toBar(ocean.O)}] ${Math.round(Number(ocean.O || 0))}%`,
+        `Conscientiousness (C):[${toBar(ocean.C)}] ${Math.round(Number(ocean.C || 0))}%`,
+        `Extraversion (E):      [${toBar(ocean.E)}] ${Math.round(Number(ocean.E || 0))}%`,
+        `Agreeableness (A):     [${toBar(ocean.A)}] ${Math.round(Number(ocean.A || 0))}%`,
+        `Neuroticism (N):       [${toBar(ocean.N)}] ${Math.round(Number(ocean.N || 0))}%`,
       ],
     },
     {
-      title: 'Cognitive Style',
+      title: 'Cognitive',
       lines: [
         `Analytical: [${toBar(cognitive.analytical)}] ${Math.round(Number(cognitive.analytical || 0))}%`,
         `Creative:   [${toBar(cognitive.creative)}] ${Math.round(Number(cognitive.creative || 0))}%`,
@@ -122,7 +130,7 @@ const toSectionPages = ({ result }) => {
       ],
     },
     {
-      title: 'Behavior Vector',
+      title: 'Behavior',
       lines: [
         `Leadership:       [${toBar(behaviorVector.leadership)}] ${Math.round(Number(behaviorVector.leadership || 0))}%`,
         `Risk Tolerance:   [${toBar(behaviorVector.risk_tolerance)}] ${Math.round(Number(behaviorVector.risk_tolerance || 0))}%`,
@@ -132,13 +140,13 @@ const toSectionPages = ({ result }) => {
       ],
     },
     {
-      title: 'Skills Chart',
+      title: 'Skills',
       lines: topSkills.length
         ? topSkills.map((skill, index) => `${index + 1}. ${skill}`)
         : ['No skill chart data available.'],
     },
     {
-      title: 'Career Matches',
+      title: 'Careers',
       lines: careers.length
         ? careers.slice(0, 6).flatMap((career, index) => [
             `${index + 1}. ${career.career} (${career.cluster || 'General'}) - ${career.score}% | Confidence ${career.confidence || 0}%`,
@@ -148,39 +156,29 @@ const toSectionPages = ({ result }) => {
         : ['No career matches available.'],
     },
     {
-      title: 'Career Contrast',
-      lines:
-        careerContrast?.summary
+      title: 'Summary',
+      lines: [
+        `Top Career: ${careers[0]?.career || 'n/a'} (${careers[0]?.score || 0}%)`,
+        `Confidence Band: ${String(result.confidence_band || 'low').toUpperCase()}`,
+        `Consistency Score: ${consistencyScore}%`,
+        '',
+        ...(careerContrast?.summary
           ? [
-              `Primary: ${careerContrast.primaryCareer || 'n/a'}`,
-              `Secondary: ${careerContrast.secondaryCareer || 'n/a'}`,
-              '',
               ...wrapLine(careerContrast.summary),
               '',
               ...(Array.isArray(careerContrast.reasons) ? careerContrast.reasons.slice(0, 4) : []).map(
                 (item, index) => `${index + 1}. ${item}`
               ),
+              '',
             ]
-          : ['Career contrast not available.'],
-    },
-    {
-      title: 'Learning Roadmap',
-      lines: roadmap.length
-        ? roadmap.flatMap((item, index) => [
-            `${index + 1}. ${item.stage || 'Stage'}`,
-            ...wrapLine(item.summary || ''),
-            '',
-          ])
-        : ['No roadmap available.'],
-    },
-    {
-      title: 'Executive Summary',
-      lines: [
-        `Archetype: ${result.personality_type_label || result.personality_type || 'Analytical Builder'}`,
-        `Top Career: ${careers[0]?.career || 'n/a'} (${careers[0]?.score || 0}%)`,
-        `Confidence Band: ${String(result.confidence_band || 'low').toUpperCase()}`,
-        `Consistency Score: ${consistencyScore}%`,
-        '',
+          : []),
+        ...(roadmap.length
+          ? roadmap.slice(0, 4).flatMap((item, index) => [
+              `${index + 1}. ${item.stage || 'Stage'}`,
+              ...wrapLine(item.summary || ''),
+              '',
+            ])
+          : []),
         ...wrapLine(
           narrativeSummary ||
             'This report combines personality, cognition, behavior, and career alignment signals to guide your next steps.'
@@ -188,59 +186,83 @@ const toSectionPages = ({ result }) => {
       ],
     },
   ];
-
-  return pages;
 };
 
-const toContentStream = ({ title, lines = [] }) => {
-  const outputLines = [
-    'BT',
-    '/F1 17 Tf',
-    '46 768 Td',
-    `(${escapePdfText(title)}) Tj`,
-    '/F1 11 Tf',
-    '0 -28 Td',
-  ];
+const checkPageBreak = ({ state, requiredSpace = lineHeight }) => {
+  if (state.y - requiredSpace < PAGE_MARGIN) {
+    state.pages.push([]);
+    state.pageIndex += 1;
+    state.y = TOP_MARGIN;
+  }
+};
 
-  lines.forEach((line) => {
-    outputLines.push(`(${escapePdfText(line)}) Tj`);
-    outputLines.push('T*');
+const pushTextLine = ({ state, text = '', font = 'F1', size = 11 }) => {
+  checkPageBreak({ state, requiredSpace: lineHeight });
+
+  const content = String(text || '').trim();
+  if (content) {
+    state.pages[state.pageIndex].push(
+      `BT\n/${font} ${size} Tf\n1 0 0 1 ${PAGE_MARGIN} ${state.y.toFixed(2)} Tm\n(${escapePdfText(content)}) Tj\nET`
+    );
+  }
+
+  state.y -= lineHeight;
+};
+
+const toPageStreams = (sections = []) => {
+  const state = {
+    pages: [[]],
+    pageIndex: 0,
+    y: TOP_MARGIN,
+  };
+
+  sections.forEach((section, sectionIndex) => {
+    if (sectionIndex > 0) {
+      state.y -= sectionSpacing;
+    }
+
+    checkPageBreak({ state, requiredSpace: lineHeight * 2 + sectionSpacing });
+    pushTextLine({ state, text: section.title, font: 'F2', size: 17 });
+    state.y -= Math.max(4, Math.round(sectionSpacing / 3));
+
+    const rawLines = Array.isArray(section.lines) ? section.lines : [];
+    rawLines.forEach((rawLine) => {
+      const wrapped = wrapLine(rawLine, DEFAULT_WRAP_WIDTH);
+      wrapped.forEach((line) => {
+        pushTextLine({ state, text: line, font: 'F1', size: 11 });
+      });
+    });
   });
 
-  outputLines.push('ET');
-
-  return outputLines.join('\n');
+  return state.pages.map((commands) => commands.join('\n'));
 };
 
-const buildPdfBufferFromPages = (pages = []) => {
-  const pageCount = pages.length;
-  const fontObjectId = 3 + pageCount * 2;
-
+const buildPdfBufferFromStreams = (streams = []) => {
+  const pageCount = streams.length;
   const objects = new Map();
   const kids = [];
 
   objects.set(1, '<< /Type /Catalog /Pages 2 0 R >>');
 
-  pages.forEach((page, index) => {
+  streams.forEach((stream, index) => {
     const pageObjectId = 3 + index * 2;
     const contentObjectId = 4 + index * 2;
-    const stream = toContentStream(page);
     const length = Buffer.byteLength(stream, 'utf8');
 
-    objects.set(
-      contentObjectId,
-      `<< /Length ${length} >>\nstream\n${stream}\nendstream`
-    );
+    objects.set(contentObjectId, `<< /Length ${length} >>\nstream\n${stream}\nendstream`);
     objects.set(
       pageObjectId,
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontObjectId} 0 R >> >> /Contents ${contentObjectId} 0 R >>`
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 ${
+        3 + pageCount * 2
+      } 0 R /F2 ${4 + pageCount * 2} 0 R >> >> /Contents ${contentObjectId} 0 R >>`
     );
 
     kids.push(`${pageObjectId} 0 R`);
   });
 
   objects.set(2, `<< /Type /Pages /Count ${pageCount} /Kids [${kids.join(' ')}] >>`);
-  objects.set(fontObjectId, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  objects.set(3 + pageCount * 2, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  objects.set(4 + pageCount * 2, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
 
   const orderedObjectIds = Array.from(objects.keys()).sort((a, b) => a - b);
   let pdf = '%PDF-1.4\n';
@@ -268,8 +290,9 @@ const buildPdfBufferFromPages = (pages = []) => {
 };
 
 const generateAssessmentPdfBuffer = ({ resultSummary }) => {
-  const pages = toSectionPages({ result: resultSummary || {} });
-  return buildPdfBufferFromPages(pages);
+  const sections = toReportSections({ result: resultSummary || {} });
+  const streams = toPageStreams(sections);
+  return buildPdfBufferFromStreams(streams);
 };
 
 module.exports = {

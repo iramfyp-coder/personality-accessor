@@ -511,6 +511,16 @@ const mapResultToLegacySummary = (result = {}) => ({
   confidence_band: toString(result.analytics?.confidenceBand || ''),
   confidence_gap: Number(result.analytics?.confidenceGap || 0),
   stop_confidence: Number(result.analytics?.stopConfidence || 0),
+  insightHeatmap: Array.isArray(result.analytics?.insightHeatmap) ? result.analytics.insightHeatmap : [],
+  insight_heatmap: Array.isArray(result.analytics?.insightHeatmap) ? result.analytics.insightHeatmap : [],
+  facetScores:
+    result.analytics?.facetScores && typeof result.analytics.facetScores === 'object'
+      ? result.analytics.facetScores
+      : {},
+  facet_scores:
+    result.analytics?.facetScores && typeof result.analytics.facetScores === 'object'
+      ? result.analytics.facetScores
+      : {},
   cv_data: result.cvData || {},
   balance: result.analytics?.balance || {
     personalityWeight: 50,

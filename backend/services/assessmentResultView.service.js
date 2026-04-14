@@ -93,7 +93,13 @@ const toAssessmentReport = (result) => {
     dominantTrait:
       String(result.personality?.archetypes?.dominantTrait || '').trim() ||
       getDominantTrait(traits),
-    facetScores: {},
+    insightHeatmap: Array.isArray(result.analytics?.insightHeatmap)
+      ? result.analytics.insightHeatmap
+      : [],
+    facetScores:
+      result.analytics?.facetScores && typeof result.analytics.facetScores === 'object'
+        ? result.analytics.facetScores
+        : {},
     modelVersion: result.schemaVersion || '2.0.0',
     aiReport: toPublicAiReport(aiReport),
     aiReportMeta: toAiReportMeta(aiReport),

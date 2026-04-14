@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { traitColors } from '../../theme/colors';
 import { TRAIT_META, TRAIT_ORDER } from '../../utils/traits';
 import { sanitizeChartValue } from '../../utils/chartSafety';
+import Skeleton from '../ui/Skeleton';
 
 const FACET_LABELS = {
   O1: 'Imagination',
@@ -60,8 +61,29 @@ const toRgba = (hex, alpha) => {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 };
 
+const toFacetScoreObject = (input = {}) => {
+  if (Array.isArray(input)) {
+    return input.reduce((accumulator, entry) => {
+      const trait = String(entry?.trait || '').toUpperCase();
+      const value = sanitizeChartValue(entry?.value || 0);
+
+      if (!trait) {
+        return accumulator;
+      }
+
+      for (let index = 1; index <= 6; index += 1) {
+        accumulator[`${trait}${index}`] = sanitizeChartValue(value + index - 3);
+      }
+
+      return accumulator;
+    }, {});
+  }
+
+  return input && typeof input === 'object' ? input : {};
+};
+
 const mapFacetEntries = (facetScores = {}) =>
-  Object.entries(facetScores)
+  Object.entries(toFacetScoreObject(facetScores))
     .map(([code, score]) => {
       const trait = code.charAt(0);
       const index = Number.parseInt(code.slice(1), 10) || 0;
@@ -126,7 +148,10 @@ const InsightHeatmapChart = ({ facetScores = {}, compact = false }) => {
   if (!visibleEntries.length) {
     return (
       <div className="heatmap-shell">
-        <p className="empty-state">Facet intensity will appear after the first report is generated.</p>
+        <div className="skeleton-stack">
+          <Skeleton height="180px" />
+          <Skeleton height="14px" />
+        </div>
       </div>
     );
   }

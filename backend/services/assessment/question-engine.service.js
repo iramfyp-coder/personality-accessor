@@ -5,11 +5,17 @@ const { getOpenAiClient } = require('./openaiClient');
 
 const DIFFICULTY_LEVELS = ['easy', 'medium', 'advanced'];
 const EXPERIENCE_LEVELS = ['junior', 'mid', 'senior'];
-const QUESTION_COUNT = 10;
-const MAX_AI_QUESTION_COUNT = 3;
+const MIN_QUESTION_COUNT = 20;
+const BASE_QUESTION_COUNT = 20;
+const COMPLEXITY_QUESTION_COUNT = 25;
+const LOW_CONFIDENCE_QUESTION_COUNT = 30;
+const MAX_QUESTION_COUNT = 35;
+const QUESTION_EXTENSION_STEP = 5;
+const LOW_CONFIDENCE_EXTENSION_THRESHOLD = 0.7;
+const MAX_AI_QUESTION_COUNT = 8;
 const MAX_AI_ATTEMPTS_PER_SLOT = 1;
-const AI_GENERATION_BUDGET_MS = 12000;
-const AI_REQUEST_TIMEOUT_MS = 4500;
+const AI_GENERATION_BUDGET_MS = 24000;
+const AI_REQUEST_TIMEOUT_MS = 6500;
 const QUESTION_TYPES = ['likert', 'mcq', 'scale', 'text', 'scenario'];
 const QUESTION_STAGES = ['personality', 'cognitive', 'behavior', 'career'];
 const QUESTION_THEMES = [
@@ -25,8 +31,6 @@ const QUESTION_THEMES = [
 ];
 const ANSWER_FORMATS = ['rating', 'choice', 'slider', 'text_short', 'text_long', 'scenario_decision'];
 const SCORING_TYPES = ['numeric', 'weighted', 'ai_analysis', 'behavior_signal', 'cognitive_signal'];
-
-const DIFFICULTY_CURVE = ['easy', 'easy', 'easy', 'medium', 'medium', 'medium', 'advanced', 'advanced', 'advanced', 'advanced'];
 
 const QUESTION_FLOW_BLUEPRINTS = [
   {
@@ -149,9 +153,105 @@ const QUESTION_FLOW_BLUEPRINTS = [
     expectedLength: 0,
     description: 'Measure pressure response and quality preservation near deadlines.',
   },
+  {
+    intent: 'Values',
+    stage: 'personality',
+    category: 'values',
+    trait: 'value_alignment',
+    answerFormat: 'scenario_decision',
+    scoringType: 'behavior_signal',
+    theme: 'social',
+    uiHint: 'Choose the option that reflects what you would really prioritize',
+    expectedLength: 0,
+    description: 'Measure values under real-world trade-offs.',
+  },
+  {
+    intent: 'Adaptability',
+    stage: 'personality',
+    category: 'work_style',
+    trait: 'adaptability',
+    answerFormat: 'choice',
+    scoringType: 'weighted',
+    theme: 'workplace',
+    uiHint: 'Choose your instinctive adaptation strategy',
+    expectedLength: 0,
+    description: 'Measure flexibility when priorities change suddenly.',
+  },
+  {
+    intent: 'Collaboration',
+    stage: 'behavior',
+    category: 'teamwork',
+    trait: 'team_preference',
+    answerFormat: 'scenario_decision',
+    scoringType: 'behavior_signal',
+    theme: 'social',
+    uiHint: 'Pick the first action you would take with the team',
+    expectedLength: 0,
+    description: 'Measure collaboration quality under pressure.',
+  },
+  {
+    intent: 'Resilience',
+    stage: 'behavior',
+    category: 'stress',
+    trait: 'stress_tolerance',
+    answerFormat: 'scenario_decision',
+    scoringType: 'behavior_signal',
+    theme: 'stress',
+    uiHint: 'Choose your first response when plans fail',
+    expectedLength: 0,
+    description: 'Measure recovery behavior after setbacks.',
+  },
+  {
+    intent: 'Innovation',
+    stage: 'cognitive',
+    category: 'creativity',
+    trait: 'creativity',
+    answerFormat: 'scenario_decision',
+    scoringType: 'cognitive_signal',
+    theme: 'creative',
+    uiHint: 'Choose the most practical innovation path',
+    expectedLength: 0,
+    description: 'Measure innovation decisions under constraints.',
+  },
+  {
+    intent: 'Execution',
+    stage: 'cognitive',
+    category: 'decision_making',
+    trait: 'systematic',
+    answerFormat: 'scenario_decision',
+    scoringType: 'cognitive_signal',
+    theme: 'technical',
+    uiHint: 'Prioritize an action that delivers outcome with limited resources',
+    expectedLength: 0,
+    description: 'Measure execution quality with dependencies and uncertainty.',
+  },
+  {
+    intent: 'Ethics',
+    stage: 'behavior',
+    category: 'decision_making',
+    trait: 'decision_quality',
+    answerFormat: 'scenario_decision',
+    scoringType: 'behavior_signal',
+    theme: 'decision',
+    uiHint: 'Select the option that balances ethics, speed, and impact',
+    expectedLength: 0,
+    description: 'Measure ethical decision behavior in ambiguous scenarios.',
+  },
 ];
 
 const INTENT_POOL = QUESTION_FLOW_BLUEPRINTS.map((item) => item.intent);
+
+const QUESTION_CONTEXT_BUCKETS = ['cv_specific', 'personality_general', 'cognitive_scenario'];
+const CONTEXT_MIX_WEIGHTS = {
+  cv_specific: 0.3,
+  personality_general: 0.4,
+  cognitive_scenario: 0.3,
+};
+const CONTEXT_BUCKET_INTENTS = {
+  cv_specific: ['Learning', 'Independence', 'Planning', 'Analytical', 'Leadership', 'Execution'],
+  personality_general: ['Teamwork', 'Conflict', 'Values', 'Adaptability', 'Collaboration', 'Resilience'],
+  cognitive_scenario: ['Creativity', 'Risk', 'Deadline', 'Innovation', 'Ethics'],
+};
 
 const LIKERT_LABELS = [
   'Strongly Disagree',
@@ -200,19 +300,6 @@ const withTimeout = async (promise, timeoutMs = 4000) => {
   } finally {
     clearTimeout(timeoutId);
   }
-};
-
-const shuffle = (items = []) => {
-  const copy = items.slice();
-
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    const current = copy[index];
-    copy[index] = copy[swapIndex];
-    copy[swapIndex] = current;
-  }
-
-  return copy;
 };
 
 const toTokenVector = (text = '') => {
@@ -280,23 +367,6 @@ const hasDuplicateSimilarity = ({ text, references = [], threshold = 0.82 }) => 
     return score >= threshold;
   });
 };
-
-const INTENT_BLUEPRINTS = QUESTION_FLOW_BLUEPRINTS.reduce((accumulator, item) => {
-  accumulator[item.intent] = {
-    ...item,
-    type:
-      item.answerFormat === 'rating'
-        ? 'likert'
-        : item.answerFormat === 'choice'
-        ? 'mcq'
-        : item.answerFormat === 'slider'
-        ? 'scale'
-        : item.answerFormat === 'scenario_decision'
-        ? 'scenario'
-        : 'text',
-  };
-  return accumulator;
-}, {});
 
 const OCEAN_BY_TRAIT = {
   analytical: 'C',
@@ -495,6 +565,60 @@ const buildUserProfileVector = (cvData = {}) => {
   };
 };
 
+const computeCvComplexity = (cvData = {}) => {
+  const skillsCount = Array.isArray(cvData.skills) ? cvData.skills.length : 0;
+  const educationCount = Array.isArray(cvData.education) ? cvData.education.length : 0;
+  const experienceCount = Array.isArray(cvData.experience) ? cvData.experience.length : 0;
+  const projectsCount = Array.isArray(cvData.projects) ? cvData.projects.length : 0;
+  const subjectsCount = Array.isArray(cvData.subjects) ? cvData.subjects.length : 0;
+  const marksCount = Array.isArray(cvData.marks) ? cvData.marks.length : 0;
+  const interestCount = Array.isArray(cvData.interests) ? cvData.interests.length : 0;
+
+  const weightedScore =
+    skillsCount * 2.8 +
+    experienceCount * 2.3 +
+    projectsCount * 1.8 +
+    educationCount * 1.4 +
+    subjectsCount * 1.1 +
+    marksCount * 0.9 +
+    interestCount * 0.8;
+
+  return clamp(weightedScore / 40, 0, 1);
+};
+
+const determineInitialQuestionCount = ({ cvData = {}, profileVector = {} }) => {
+  const cvComplexity = computeCvComplexity(cvData);
+  const cvConfidence = clamp(Number(cvData?.confidenceScore || 0.62), 0, 1);
+  const yearsOfExperience = Number(profileVector?.yearsOfExperience || 0);
+  let target = BASE_QUESTION_COUNT;
+
+  if (cvComplexity >= 0.62 || yearsOfExperience >= 5) {
+    target = COMPLEXITY_QUESTION_COUNT;
+  }
+
+  if (cvConfidence < 0.55) {
+    target = LOW_CONFIDENCE_QUESTION_COUNT;
+  }
+
+  return clamp(target, MIN_QUESTION_COUNT, LOW_CONFIDENCE_QUESTION_COUNT);
+};
+
+const buildDifficultyCurve = (totalCount = BASE_QUESTION_COUNT) => {
+  const safeTotal = Math.max(1, Number(totalCount || BASE_QUESTION_COUNT));
+  const easyCount = Math.max(3, Math.round(safeTotal * 0.25));
+  const mediumCount = Math.max(6, Math.round(safeTotal * 0.4));
+  const advancedCount = Math.max(0, safeTotal - easyCount - mediumCount);
+
+  return [
+    ...Array.from({ length: easyCount }).map(() => 'easy'),
+    ...Array.from({ length: mediumCount }).map(() => 'medium'),
+    ...Array.from({ length: advancedCount }).map(() => 'advanced'),
+  ]
+    .slice(0, safeTotal)
+    .concat(Array.from({ length: safeTotal }).map(() => 'advanced'))
+    .slice(0, safeTotal);
+};
+
 const answerFormatToType = (answerFormat = '') => {
   const normalized = String(answerFormat || '').toLowerCase();
 
@@ -546,6 +670,40 @@ const normalizeExpectedLength = (value, fallback = 0) => {
   return clamp(Math.round(numeric), 0, 600);
 };
 
+const toContextBucketCounts = (targetCount = BASE_QUESTION_COUNT) => {
+  const safeTarget = Math.max(1, Number(targetCount || BASE_QUESTION_COUNT));
+  const cvSpecific = Math.round(safeTarget * CONTEXT_MIX_WEIGHTS.cv_specific);
+  const personalityGeneral = Math.round(safeTarget * CONTEXT_MIX_WEIGHTS.personality_general);
+  const cognitiveScenario = Math.max(0, safeTarget - cvSpecific - personalityGeneral);
+
+  return {
+    cv_specific: cvSpecific,
+    personality_general: personalityGeneral,
+    cognitive_scenario: cognitiveScenario,
+  };
+};
+
+const buildContextBucketQueue = (targetCount = BASE_QUESTION_COUNT) => {
+  const counts = toContextBucketCounts(targetCount);
+  const queue = [];
+
+  while (queue.length < targetCount) {
+    QUESTION_CONTEXT_BUCKETS.forEach((bucket) => {
+      if (counts[bucket] > 0 && queue.length < targetCount) {
+        queue.push(bucket);
+        counts[bucket] -= 1;
+      }
+    });
+  }
+
+  return queue.slice(0, targetCount);
+};
+
+const toBlueprintLookup = QUESTION_FLOW_BLUEPRINTS.reduce((accumulator, blueprint) => {
+  accumulator[String(blueprint.intent)] = blueprint;
+  return accumulator;
+}, {});
+
 const enforceThemeAlternation = (slots = []) => {
   const planned = slots.slice();
 
@@ -571,24 +729,44 @@ const enforceThemeAlternation = (slots = []) => {
   return planned;
 };
 
-const buildIntentSlots = () => {
-  const slots = QUESTION_FLOW_BLUEPRINTS.slice(0, QUESTION_COUNT).map((blueprint, index) => ({
-    slotIndex: index,
-    intent: blueprint.intent,
-    type: answerFormatToType(blueprint.answerFormat),
-    category: blueprint.category,
-    trait: blueprint.trait,
-    difficulty: DIFFICULTY_CURVE[index] || 'advanced',
-    description: blueprint.description,
-    stage: blueprint.stage,
-    theme: normalizeTheme(blueprint.theme, 'personal'),
-    answerFormat: normalizeAnswerFormat(blueprint.answerFormat, 'choice'),
-    scoringType: normalizeScoringType(blueprint.scoringType, 'numeric'),
-    uiHint: normalizeText(blueprint.uiHint || ''),
-    expectedLength: normalizeExpectedLength(blueprint.expectedLength || 0, 0),
-  }));
+const buildIntentSlots = ({ targetCount = BASE_QUESTION_COUNT, baseIndex = 0, totalCount = targetCount }) => {
+  const safeTarget = Math.max(1, Number(targetCount || BASE_QUESTION_COUNT));
+  const difficultyCurve = buildDifficultyCurve(Math.max(safeTarget, Number(totalCount || safeTarget)));
+  const bucketQueue = buildContextBucketQueue(safeTarget);
+  const bucketCursors = QUESTION_CONTEXT_BUCKETS.reduce((accumulator, bucket) => {
+    accumulator[bucket] = 0;
+    return accumulator;
+  }, {});
 
-  return enforceThemeAlternation(slots);
+  const slots = bucketQueue.map((bucket, slotIndex) => {
+    const intents = CONTEXT_BUCKET_INTENTS[bucket] || INTENT_POOL;
+    const cursor = bucketCursors[bucket] || 0;
+    const intent = intents[cursor % intents.length] || INTENT_POOL[slotIndex % INTENT_POOL.length];
+    const blueprint = toBlueprintLookup[intent] || QUESTION_FLOW_BLUEPRINTS[slotIndex % QUESTION_FLOW_BLUEPRINTS.length];
+    const orderIndex = baseIndex + slotIndex;
+
+    bucketCursors[bucket] = cursor + 1;
+
+    return {
+      slotIndex,
+      orderIndex,
+      contextBucket: bucket,
+      intent: blueprint.intent,
+      type: answerFormatToType(blueprint.answerFormat),
+      category: blueprint.category,
+      trait: blueprint.trait,
+      difficulty: difficultyCurve[orderIndex] || 'advanced',
+      description: blueprint.description,
+      stage: blueprint.stage,
+      theme: normalizeTheme(blueprint.theme, 'personal'),
+      answerFormat: normalizeAnswerFormat(blueprint.answerFormat, 'choice'),
+      scoringType: normalizeScoringType(blueprint.scoringType, 'numeric'),
+      uiHint: normalizeText(blueprint.uiHint || ''),
+      expectedLength: normalizeExpectedLength(blueprint.expectedLength || 0, 0),
+    };
+  });
+
+  return enforceThemeAlternation(slots).slice(0, safeTarget);
 };
 
 const fallbackMcqOptionsByIntent = ({ intent, trait, difficulty, profileVector = {} }) => {
@@ -654,8 +832,39 @@ const fallbackMcqOptionsByIntent = ({ intent, trait, difficulty, profileVector =
   return base;
 };
 
+const buildScenarioSeed = ({ slot, domain = 'professional' }) => {
+  const intent = String(slot.intent || '').toLowerCase();
+
+  if (intent.includes('lead')) {
+    return `You are leading a struggling ${domain} team that is missing milestones and morale is dropping`;
+  }
+
+  if (intent.includes('conflict') || intent.includes('collaboration') || intent.includes('team')) {
+    return `Two teams in your ${domain} project disagree on priorities, and delivery is now at risk`;
+  }
+
+  if (intent.includes('risk') || intent.includes('ethic') || intent.includes('decision')) {
+    return `A high-impact decision must be made today with incomplete data and visible stakeholder pressure`;
+  }
+
+  if (intent.includes('creativity') || intent.includes('innovation')) {
+    return `A core product approach failed, and you must propose a new direction under tight constraints`;
+  }
+
+  if (intent.includes('deadline') || intent.includes('resilience')) {
+    return `A critical deadline moved earlier after a production issue and resources are limited`;
+  }
+
+  if (intent.includes('analytical') || intent.includes('planning') || intent.includes('execution')) {
+    return `A complex ${domain} initiative has conflicting signals across timeline, quality, and budget`;
+  }
+
+  return `You are handling a realistic ${domain} scenario with conflicting goals and limited time`;
+};
+
 const fallbackQuestionForSlot = ({ slot, profileVector = {} }) => {
   const domain = String(profileVector.domainCategory || 'professional').replace(/_/g, ' ');
+  const scenarioSeed = buildScenarioSeed({ slot, domain });
 
   if (slot.answerFormat === 'rating') {
     const statements = {
@@ -704,7 +913,7 @@ const fallbackQuestionForSlot = ({ slot, profileVector = {} }) => {
       : 'Describe context and your first decision in 2-4 concise sentences.';
 
     return {
-      text: `In a realistic ${domain} workplace situation involving ${slot.intent.toLowerCase()}, what decision did you make and why? ${advancedTail}`,
+      text: `${scenarioSeed}. What decision do you make first, and why? ${advancedTail}`,
       type: 'text',
       category: slot.category,
       trait: slot.trait,
@@ -729,7 +938,7 @@ const fallbackQuestionForSlot = ({ slot, profileVector = {} }) => {
       : 'Choose the action you would take first.';
 
   return {
-    text: `In a realistic ${domain} scenario focused on ${slot.intent.toLowerCase()}, what would you do first? ${decisionTail}`,
+    text: `${scenarioSeed}. What would you do first? ${decisionTail}`,
     type: slot.answerFormat === 'scenario_decision' ? 'scenario' : 'mcq',
     category: slot.category,
     trait: slot.trait,
@@ -755,20 +964,29 @@ const generateOneQuestionWithAi = async ({ slot, cvData = {}, profileVector = {}
   const subjects = toStringList(cvData.subjects, 6).join('; ') || 'n/a';
   const skills = toStringList((cvData.skills || []).map((skill) => skill?.name), 8).join('; ') || 'n/a';
   const interests = toStringList(cvData.interests, 8).join('; ') || 'n/a';
+  const careerHints = toStringList(cvData.careerSignals, 8).join('; ') || 'n/a';
+  const experience = toStringList(cvData.experience, 8).join('; ') || 'n/a';
+  const roleHint = normalizeText(cvData.userRole || profileVector.experienceLevel || profileVector.domainRole || 'professional');
+  const contextMix =
+    slot.contextBucket === 'cv_specific'
+      ? '30% CV specific context'
+      : slot.contextBucket === 'personality_general'
+      ? '40% personality-general context'
+      : '30% cognitive scenario context';
 
   const response = await getOpenAiClient().responses.create({
     model: config.openaiModel,
-    temperature: 0.3,
+    temperature: 0.25,
     max_output_tokens: 420,
     input: [
       {
         role: 'system',
         content:
-          'You generate psychometrically useful adaptive career-assessment questions. Return strict JSON only.',
+          'You generate psychometrically useful adaptive career-assessment questions. Questions must be simple but deep, scenario-based, and career-neutral. Return strict JSON only.',
       },
       {
         role: 'user',
-        content: `Generate one adaptive assessment question.\n\nReturn JSON:\n{\n  "text": "",\n  "type": "likert|mcq|scale|text|scenario",\n  "trait": "",\n  "category": "",\n  "stage": "personality|cognitive|behavior|career",\n  "theme": "academic|workplace|social|leadership|creative|technical|personal|decision|stress",\n  "answerFormat": "rating|choice|slider|text_short|text_long|scenario_decision",\n  "scoringType": "numeric|weighted|ai_analysis|behavior_signal|cognitive_signal",\n  "uiHint": "",\n  "expectedLength": 0,\n  "options": [],\n  "scaleMin": 1,\n  "scaleMax": 10,\n  "expectedAnswer": ""\n}\n\nRules:\n- Intent: ${slot.intent}\n- Stage target: ${slot.stage}\n- Theme target: ${slot.theme}\n- Category target: ${slot.category}\n- Trait target: ${slot.trait}\n- Answer format target: ${slot.answerFormat}\n- Scoring type target: ${slot.scoringType}\n- Difficulty: ${slot.difficulty}\n- Candidate domain: ${profileVector.domainCategory || 'unknown'}\n- Candidate role: ${profileVector.domainRole || 'professional'}\n- Education: ${education}\n- Subjects: ${subjects}\n- Skills: ${skills}\n- Interests: ${interests}\n- Avoid repeated themes: ${(previousThemes || []).join(', ') || 'none'}\n- Must be realistic, contextual, and decision-focused\n- Remove generic phrasing and include a concrete work/career scenario\n- Advanced questions must include multi-factor trade-offs\n- rating => likert, no options\n- choice => mcq, exactly 4 options\n- slider => scale with min and max\n- text_* => text, no options\n- scenario_decision => scenario with exactly 4 options`,
+        content: `Generate one adaptive assessment question.\n\nReturn JSON:\n{\n  "text": "",\n  "type": "likert|mcq|scale|text|scenario",\n  "trait": "",\n  "category": "",\n  "stage": "personality|cognitive|behavior|career",\n  "theme": "academic|workplace|social|leadership|creative|technical|personal|decision|stress",\n  "answerFormat": "rating|choice|slider|text_short|text_long|scenario_decision",\n  "scoringType": "numeric|weighted|ai_analysis|behavior_signal|cognitive_signal",\n  "uiHint": "",\n  "expectedLength": 0,\n  "options": [],\n  "scaleMin": 1,\n  "scaleMax": 10,\n  "expectedAnswer": ""\n}\n\nCandidate profile:\n- Role: ${roleHint}\n- Domain: ${profileVector.domainCategory || 'unknown'}\n- Education: ${education}\n- Experience: ${experience}\n- Subjects: ${subjects}\n- Skills: ${skills}\n- Interests: ${interests}\n- Career hints: ${careerHints}\n\nQuestion design constraints:\n- Intent: ${slot.intent}\n- Stage target: ${slot.stage}\n- Theme target: ${slot.theme}\n- Category target: ${slot.category}\n- Trait target: ${slot.trait}\n- Answer format target: ${slot.answerFormat}\n- Scoring type target: ${slot.scoringType}\n- Difficulty: ${slot.difficulty}\n- Context bucket target: ${contextMix}\n- Avoid repeated themes: ${(previousThemes || []).join(', ') || 'none'}\n- Do NOT optimize for one specific career path\n- Keep balance across personality, leadership, decision-making, creativity, risk, teamwork, and values\n- Must be realistic, contextual, and decision-focused\n- Use scenario-based depth (e.g., failing project, limited resources, stakeholder conflict)\n- Remove generic phrasing and avoid yes/no templates\n- Advanced questions must include multi-factor trade-offs\n- rating => likert, no options\n- choice => mcq, exactly 4 options\n- slider => scale with min and max\n- text_* => text, no options\n- scenario_decision => scenario with exactly 4 options`,
       },
     ],
   });
@@ -802,12 +1020,16 @@ const normalizeQuestionText = ({ text = '', type = 'mcq', difficulty = 'medium' 
   }
 
   let normalized = cleaned.endsWith('?') ? cleaned : `${cleaned}?`;
+  const hasScenarioCue = /\b(you are|your team|project|deadline|stakeholder|scenario|situation|decision)\b/i.test(
+    normalized
+  );
+
+  if (!hasScenarioCue) {
+    normalized = `You are in a real project scenario. ${normalized.charAt(0).toLowerCase()}${normalized.slice(1)}`;
+  }
 
   if (difficulty === 'advanced') {
-    const hasMultifactorCue = /\b(trade[- ]?off|constraint|deadline|stakeholder|budget|quality|risk|dependency)\b/i.test(
-      normalized
-    );
-
+    const hasMultifactorCue = /\b(trade[- ]?off|constraint|deadline|stakeholder|budget|quality|risk|dependency)\b/i.test(normalized);
     if (!hasMultifactorCue) {
       normalized = `${normalized.replace(/\?$/, '')} while balancing time, quality, and stakeholder impact?`;
     }
@@ -970,6 +1192,7 @@ const normalizeGeneratedQuestion = ({ generated = {}, slot, profileVector, index
     stage,
     uiHint,
     expectedLength,
+    contextBucket: slot.contextBucket || 'personality_general',
     plannerCategory: slot.category,
     memorySignature: toQuestionSignature(text),
     domainTags: [String(profileVector.domainCategory || '')].filter(Boolean),
@@ -1068,8 +1291,19 @@ const enforceSlotCoherence = ({ question, slot, profileVector }) => {
   };
 };
 
-const buildQuestionPlanWithPipeline = async ({ profileVector, cvData, askedQuestions = [] }) => {
-  const slots = buildIntentSlots({ profileVector });
+const buildQuestionPlanWithPipeline = async ({
+  profileVector,
+  cvData,
+  askedQuestions = [],
+  targetCount = BASE_QUESTION_COUNT,
+  baseIndex = 0,
+  totalCount = targetCount,
+}) => {
+  const slots = buildIntentSlots({
+    targetCount,
+    baseIndex,
+    totalCount,
+  });
   const references = buildReferenceEntries(askedQuestions);
   const generated = [];
   const generationStartedAt = Date.now();
@@ -1099,7 +1333,7 @@ const buildQuestionPlanWithPipeline = async ({ profileVector, cvData, askedQuest
         generated: aiCandidate || {},
         slot,
         profileVector,
-        index,
+        index: baseIndex + index,
       });
 
       const localReferences = [
@@ -1127,7 +1361,7 @@ const buildQuestionPlanWithPipeline = async ({ profileVector, cvData, askedQuest
         generated: {},
         slot,
         profileVector,
-        index,
+        index: baseIndex + index,
       });
 
       forceNonDuplicateText({
@@ -1145,7 +1379,7 @@ const buildQuestionPlanWithPipeline = async ({ profileVector, cvData, askedQuest
     });
   }
 
-  return generated.slice(0, QUESTION_COUNT).map((question, index) => {
+  return generated.slice(0, targetCount).map((question, index) => {
     const slot = slots[index] || slots[slots.length - 1];
     const coherent = enforceSlotCoherence({
       question,
@@ -1155,7 +1389,7 @@ const buildQuestionPlanWithPipeline = async ({ profileVector, cvData, askedQuest
 
     return {
       ...coherent,
-      order: index,
+      order: baseIndex + index,
     };
   });
 };
@@ -1179,6 +1413,21 @@ const summarizeForIntro = ({ profileVector, questionPlan }) => {
     return accumulator;
   }, {});
 
+  const contextBuckets = questionPlan.reduce((accumulator, item) => {
+    const key = String(item.contextBucket || 'personality_general');
+    accumulator[key] = Number(accumulator[key] || 0) + 1;
+    return accumulator;
+  }, {});
+
+  const difficultyCurve = questionPlan.reduce(
+    (accumulator, item) => {
+      const level = String(item.difficulty || 'medium');
+      accumulator[level] = Number(accumulator[level] || 0) + 1;
+      return accumulator;
+    },
+    { easy: 0, medium: 0, advanced: 0 }
+  );
+
   return {
     greeting: `Your interview is tailored for ${profileVector.domainRole} context and ${profileVector.experience} experience level.`,
     focus:
@@ -1188,22 +1437,27 @@ const summarizeForIntro = ({ profileVector, questionPlan }) => {
       intents: intentCounts,
       stages: stageCounts,
       answerFormats: formatCounts,
-      difficultyCurve: {
-        easy: 3,
-        medium: 3,
-        advanced: 4,
-      },
+      contextBuckets,
+      difficultyCurve,
     },
   };
 };
 
-const generateQuestionPlan = async ({ cvData = {}, askedQuestions = [] }) => {
+const generateQuestionPlan = async ({ cvData = {}, askedQuestions = [], targetCount } = {}) => {
   const profileVector = buildUserProfileVector(cvData);
+  const resolvedTargetCount = clamp(
+    Number(targetCount || determineInitialQuestionCount({ cvData, profileVector })),
+    MIN_QUESTION_COUNT,
+    LOW_CONFIDENCE_QUESTION_COUNT
+  );
 
   const questionPlan = await buildQuestionPlanWithPipeline({
     profileVector,
     cvData,
     askedQuestions,
+    targetCount: resolvedTargetCount,
+    baseIndex: 0,
+    totalCount: resolvedTargetCount,
   });
 
   const questionPoolBackup = questionPlan.slice(0, 120).map((question) => ({
@@ -1218,6 +1472,7 @@ const generateQuestionPlan = async ({ cvData = {}, askedQuestions = [] }) => {
     scoringType: question.scoringType,
     stage: question.stage,
     theme: question.theme,
+    contextBucket: question.contextBucket,
     uiHint: question.uiHint,
     expectedLength: question.expectedLength,
     options: question.options,
@@ -1243,6 +1498,8 @@ const generateQuestionPlan = async ({ cvData = {}, askedQuestions = [] }) => {
       createdAt: new Date().toISOString(),
     })),
     smartIntro: summarizeForIntro({ profileVector, questionPlan }),
+    targetQuestionCount: resolvedTargetCount,
+    cvComplexity: Number(computeCvComplexity(cvData).toFixed(4)),
   };
 };
 
@@ -1324,7 +1581,10 @@ const computeCreativitySignal = ({ answers = [], questionPlan = [] }) => {
 
 const computeAdaptiveConfidence = ({ answers = [], questionPlan = [] }) => {
   const normalizedAnswers = Array.isArray(answers) ? answers : [];
-  const totalQuestions = Math.max(1, Math.min(QUESTION_COUNT, Array.isArray(questionPlan) ? questionPlan.length : QUESTION_COUNT));
+  const totalQuestions = Math.max(
+    1,
+    Array.isArray(questionPlan) && questionPlan.length ? questionPlan.length : BASE_QUESTION_COUNT
+  );
   const answeredCount = normalizedAnswers.length;
 
   if (!answeredCount) {
@@ -1347,15 +1607,20 @@ const computeAdaptiveConfidence = ({ answers = [], questionPlan = [] }) => {
   const consistency = clamp(1 - variance / 0.25, 0, 1);
   const decisiveness =
     scores.reduce((sum, score) => sum + Math.abs(score - 0.5), 0) / Math.max(scores.length, 1) * 2;
-
-  const confidence = clamp(coverage * 0.5 + consistency * 0.25 + decisiveness * 0.25, 0, 1);
+  const signalStrength = clamp(Math.abs(avg - 0.5) * 2, 0, 1);
+  const confidence = clamp(
+    coverage * 0.3 + consistency * 0.25 + decisiveness * 0.25 + signalStrength * 0.2,
+    0,
+    1
+  );
 
   return Number(confidence.toFixed(4));
 };
 
 const reapplyDifficultyCurve = (plan = []) =>
-  plan.map((question, index) => {
-    const difficulty = DIFFICULTY_CURVE[index] || 'advanced';
+  plan.map((question, index, list) => {
+    const curve = buildDifficultyCurve(Math.max(list.length, BASE_QUESTION_COUNT));
+    const difficulty = curve[index] || 'advanced';
     return {
       ...question,
       difficulty,
@@ -1364,7 +1629,7 @@ const reapplyDifficultyCurve = (plan = []) =>
     };
   });
 
-const computeFatigueMetrics = ({ answerTelemetry = [], totalQuestions = QUESTION_COUNT }) => {
+const computeFatigueMetrics = ({ answerTelemetry = [], totalQuestions = BASE_QUESTION_COUNT }) => {
   const telemetry = Array.isArray(answerTelemetry) ? answerTelemetry : [];
 
   if (!telemetry.length) {
@@ -1495,6 +1760,144 @@ const adaptUpcomingQuestions = ({ session, answeredQuestionId = '', fatigueState
   return adapted;
 };
 
+const toAverageIntentScore = ({ answers = [], questionPlan = [], intents = [] }) => {
+  const byQuestionId = new Map((Array.isArray(questionPlan) ? questionPlan : []).map((q) => [q.questionId, q]));
+  const targetIntents = new Set((Array.isArray(intents) ? intents : []).map((item) => String(item || '').toLowerCase()));
+
+  const matched = (Array.isArray(answers) ? answers : []).filter((answer) => {
+    const question = byQuestionId.get(answer.questionId);
+    const intent = String(question?.intent || answer?.metadata?.intent || '').toLowerCase();
+    return targetIntents.has(intent);
+  });
+
+  if (!matched.length) {
+    return 0.5;
+  }
+
+  const avg = matched.reduce((sum, answer) => {
+    const question = byQuestionId.get(answer.questionId);
+    return sum + extractAnswerScore({ answer, question });
+  }, 0) / matched.length;
+
+  return clamp(avg, 0, 1);
+};
+
+const detectAnswerInconsistency = ({ answers = [], questionPlan = [] }) => {
+  const teamwork = toAverageIntentScore({
+    answers,
+    questionPlan,
+    intents: ['teamwork', 'collaboration', 'conflict'],
+  });
+  const independence = toAverageIntentScore({
+    answers,
+    questionPlan,
+    intents: ['independence', 'adaptability', 'planning'],
+  });
+  const risk = toAverageIntentScore({
+    answers,
+    questionPlan,
+    intents: ['risk', 'innovation'],
+  });
+  const deadline = toAverageIntentScore({
+    answers,
+    questionPlan,
+    intents: ['deadline', 'resilience'],
+  });
+
+  const contradictions = [];
+  if (teamwork >= 0.75 && independence >= 0.75) {
+    contradictions.push('Strong teamwork and strong solo-preference signals are both high.');
+  }
+  if (risk >= 0.72 && deadline <= 0.36) {
+    contradictions.push('High risk appetite appears with low deadline pressure tolerance.');
+  }
+
+  const inconsistencyScore = clamp(
+    contradictions.length * 0.4 + (Math.abs(teamwork - independence) < 0.05 ? 0.25 : 0),
+    0,
+    1
+  );
+
+  return {
+    isInconsistent: contradictions.length > 0 || inconsistencyScore >= 0.65,
+    inconsistencyScore: Number(inconsistencyScore.toFixed(4)),
+    contradictions,
+  };
+};
+
+const generateSupplementalQuestionPlan = async ({
+  cvData = {},
+  askedQuestions = [],
+  existingQuestionPlan = [],
+  additionalCount = QUESTION_EXTENSION_STEP,
+}) => {
+  const profileVector = buildUserProfileVector(cvData);
+  const existing = Array.isArray(existingQuestionPlan) ? existingQuestionPlan : [];
+  const safeAdditional = clamp(Number(additionalCount || 0), 0, MAX_QUESTION_COUNT - existing.length);
+
+  if (!safeAdditional) {
+    return [];
+  }
+
+  const mergedAsked = [
+    ...(Array.isArray(askedQuestions) ? askedQuestions : []),
+    ...existing.map((question) => ({
+      signature: question.memorySignature || toQuestionSignature(question.text || ''),
+      text: question.text || '',
+    })),
+  ];
+
+  const additions = await buildQuestionPlanWithPipeline({
+    profileVector,
+    cvData,
+    askedQuestions: mergedAsked,
+    targetCount: safeAdditional,
+    baseIndex: existing.length,
+    totalCount: existing.length + safeAdditional,
+  });
+
+  return additions;
+};
+
+const evaluateAdaptiveExtensionNeed = ({ session, confidenceThreshold = LOW_CONFIDENCE_EXTENSION_THRESHOLD }) => {
+  const answers = Array.isArray(session?.answers) ? session.answers : [];
+  const questionPlan = Array.isArray(session?.questionPlan) ? session.questionPlan : [];
+  const currentCount = questionPlan.length;
+
+  if (!currentCount || answers.length < currentCount || currentCount >= MAX_QUESTION_COUNT) {
+    return {
+      extraQuestions: 0,
+      reasons: [],
+      confidence: computeAdaptiveConfidence({ answers, questionPlan }),
+      inconsistency: { isInconsistent: false, inconsistencyScore: 0, contradictions: [] },
+    };
+  }
+
+  const confidence = computeAdaptiveConfidence({ answers, questionPlan });
+  const inconsistency = detectAnswerInconsistency({ answers, questionPlan });
+  let extraQuestions = 0;
+  const reasons = [];
+
+  if (confidence < confidenceThreshold) {
+    extraQuestions += QUESTION_EXTENSION_STEP;
+    reasons.push('low_confidence');
+  }
+
+  if (inconsistency.isInconsistent) {
+    extraQuestions += QUESTION_EXTENSION_STEP;
+    reasons.push('inconsistent_answers');
+  }
+
+  extraQuestions = clamp(extraQuestions, 0, MAX_QUESTION_COUNT - currentCount);
+
+  return {
+    extraQuestions,
+    reasons,
+    confidence,
+    inconsistency,
+  };
+};
+
 const shouldStopAssessmentEarly = ({ session }) => {
   const answers = Array.isArray(session?.answers) ? session.answers : [];
   const questionPlan = Array.isArray(session?.questionPlan) ? session.questionPlan : [];
@@ -1505,7 +1908,8 @@ const shouldStopAssessmentEarly = ({ session }) => {
   });
 
   const answeredCount = answers.length;
-  const shouldStop = answeredCount >= 6 && confidence > 0.85;
+  const minimumAnswersBeforeStop = Math.max(MIN_QUESTION_COUNT, questionPlan.length || 0);
+  const shouldStop = answeredCount >= minimumAnswersBeforeStop && confidence > 0.88;
 
   return {
     shouldStop,
@@ -1516,6 +1920,9 @@ const shouldStopAssessmentEarly = ({ session }) => {
 module.exports = {
   buildUserProfileVector,
   generateQuestionPlan,
+  generateSupplementalQuestionPlan,
+  evaluateAdaptiveExtensionNeed,
+  detectAnswerInconsistency,
   adaptUpcomingQuestions,
   computeFatigueMetrics,
   computeAdaptiveConfidence,

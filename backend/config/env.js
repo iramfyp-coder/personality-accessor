@@ -9,6 +9,7 @@ const LOCALHOST_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
 ];
+const LOCALHOST_DYNAMIC_PORT_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
 const VERCEL_PREVIEW_DOMAIN_PATTERN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
 
 const toInt = (value, fallback) => {
@@ -45,6 +46,10 @@ const isAllowedCorsOrigin = (origin) => {
   }
 
   if (corsOrigins.includes(origin)) {
+    return true;
+  }
+
+  if (LOCALHOST_DYNAMIC_PORT_PATTERN.test(origin)) {
     return true;
   }
 

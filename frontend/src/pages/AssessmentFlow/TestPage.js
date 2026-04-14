@@ -7,6 +7,7 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Skeleton from '../../components/ui/Skeleton';
 import Loader from '../../components/ui/Loader';
+import LoaderOverlay from '../../components/ui/LoaderOverlay';
 import QuestionRenderer from '../../components/assessment/QuestionRenderer';
 import QuestionVisualPanel from '../../components/assessment/QuestionVisualPanel';
 import TraitRadarChart from '../../components/charts/TraitRadarChart';
@@ -149,8 +150,18 @@ const AdaptiveAssessmentTestPage = () => {
 
   const progressBarRef = useRef(null);
   const questionCardRef = useRef(null);
+  const sidePanelRef = useRef(null);
   const autoNextTimerRef = useRef(null);
   const questionRef = useRef(null);
+  const radarTweenRef = useRef(null);
+  const radarStateRef = useRef({
+    O: 50,
+    C: 50,
+    E: 50,
+    A: 50,
+    N: 50,
+  });
+  const [animatedTraitPreview, setAnimatedTraitPreview] = useState(radarStateRef.current);
 
   const stage = questionQuery.data?.session?.stage || 'questionnaire';
   const question = questionQuery.data?.question || null;
@@ -208,6 +219,14 @@ const AdaptiveAssessmentTestPage = () => {
       { autoAlpha: 0, y: 30, scale: 0.96 },
       { autoAlpha: 1, y: 0, scale: 1, duration: 0.48, ease: 'power3.out' }
     );
+    if (sidePanelRef.current) {
+      timeline.fromTo(
+        sidePanelRef.current,
+        { autoAlpha: 0, y: 22, scale: 0.98 },
+        { autoAlpha: 1, y: 0, scale: 1, duration: 0.44, ease: 'power3.out' },
+        0.05
+      );
+    }
 
     return () => timeline.kill();
   }, [question?.questionId, question?.id, question?.sequence, question?.scaleMin, prefersReducedMotion]);
@@ -530,6 +549,42 @@ const AdaptiveAssessmentTestPage = () => {
     );
   }, [likertValue, optionId, question, questionQuery.data?.session?.answers, scaleValue, textValue]);
 
+  useEffect(() => {
+    radarTweenRef.current?.kill();
+
+    const tweenState = {
+      ...radarStateRef.current,
+    };
+
+    radarTweenRef.current = gsap.to(tweenState, {
+      O: liveTraitPreview.O,
+      C: liveTraitPreview.C,
+      E: liveTraitPreview.E,
+      A: liveTraitPreview.A,
+      N: liveTraitPreview.N,
+      duration: prefersReducedMotion ? 0 : 0.5,
+      ease: 'power2.out',
+      onUpdate: () => {
+        const next = {
+          O: Math.round(tweenState.O),
+          C: Math.round(tweenState.C),
+          E: Math.round(tweenState.E),
+          A: Math.round(tweenState.A),
+          N: Math.round(tweenState.N),
+        };
+        radarStateRef.current = next;
+        setAnimatedTraitPreview(next);
+      },
+    });
+
+    return () => radarTweenRef.current?.kill();
+  }, [liveTraitPreview, prefersReducedMotion]);
+
+  const isResultGenerationPending =
+    answerMutation.isPending &&
+    Boolean(question) &&
+    Number(question.sequence || question.index + 1 || 1) >= Number(question.total || 1);
+
   if (questionQuery.isPending) {
     return (
       <main className="app-page assessment-page phase4-question-page">
@@ -564,6 +619,10 @@ const AdaptiveAssessmentTestPage = () => {
 
   return (
     <main className="app-page assessment-page phase4-question-page">
+      <LoaderOverlay
+        visible={isResultGenerationPending}
+        message="Building your personality profile..."
+      />
       <div className="page-shell assessment-shell phase4-question-shell">
         <header className="page-header phase3-question-header">
           <div>
@@ -643,7 +702,7 @@ const AdaptiveAssessmentTestPage = () => {
             </Card>
           </div>
 
-          <div className="phase4-question-side" data-scroll-reveal>
+          <div className="phase4-question-side" data-scroll-reveal ref={sidePanelRef}>
             <QuestionVisualPanel question={question} />
             <Card
               animated={false}
@@ -651,7 +710,7 @@ const AdaptiveAssessmentTestPage = () => {
               title="Live Trait Preview"
               subtitle="Your trait radar updates while you answer."
             >
-              <TraitRadarChart traits={liveTraitPreview} compact height={220} />
+              <TraitRadarChart traits={animatedTraitPreview} compact height={220} />
             </Card>
           </div>
         </div>

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Float, OrbitControls } from '@react-three/drei';
-import Lottie from 'lottie-react';
 import {
   FiActivity,
   FiBarChart2,
@@ -16,231 +15,49 @@ import {
   FiUsers,
 } from 'react-icons/fi';
 import { gsap } from 'gsap';
+import { selectImage } from '../../services/questionImageEngine';
 
-const PULSE_LOTTIE = {
-  v: '5.7.4',
-  fr: 60,
-  ip: 0,
-  op: 120,
-  w: 200,
-  h: 200,
-  nm: 'Pulse Ring',
-  ddd: 0,
-  assets: [],
-  layers: [
-    {
-      ddd: 0,
-      ind: 1,
-      ty: 4,
-      nm: 'Outer Ring',
-      sr: 1,
-      ks: {
-        o: { a: 0, k: 100 },
-        r: {
-          a: 1,
-          k: [
-            { t: 0, s: [0] },
-            { t: 120, s: [360] },
-          ],
-        },
-        p: { a: 0, k: [100, 100, 0] },
-        a: { a: 0, k: [0, 0, 0] },
-        s: {
-          a: 1,
-          k: [
-            { t: 0, s: [74, 74, 100] },
-            { t: 60, s: [100, 100, 100] },
-            { t: 120, s: [74, 74, 100] },
-          ],
-        },
-      },
-      shapes: [
-        {
-          ty: 'gr',
-          it: [
-            { ty: 'el', p: { a: 0, k: [0, 0] }, s: { a: 0, k: [132, 132] }, nm: 'Path' },
-            {
-              ty: 'st',
-              c: { a: 0, k: [0.14, 0.82, 0.95, 1] },
-              o: { a: 0, k: 100 },
-              w: { a: 0, k: 8 },
-              lc: 2,
-              lj: 2,
-              nm: 'Stroke',
-            },
-            {
-              ty: 'tr',
-              p: { a: 0, k: [0, 0] },
-              a: { a: 0, k: [0, 0] },
-              s: { a: 0, k: [100, 100] },
-              r: { a: 0, k: 0 },
-              o: { a: 0, k: 100 },
-              sk: { a: 0, k: 0 },
-              sa: { a: 0, k: 0 },
-              nm: 'Transform',
-            },
-          ],
-          nm: 'Group',
-        },
-      ],
-      ip: 0,
-      op: 120,
-      st: 0,
-      bm: 0,
-    },
-    {
-      ddd: 0,
-      ind: 2,
-      ty: 4,
-      nm: 'Core Dot',
-      sr: 1,
-      ks: {
-        o: {
-          a: 1,
-          k: [
-            { t: 0, s: [45] },
-            { t: 60, s: [95] },
-            { t: 120, s: [45] },
-          ],
-        },
-        r: { a: 0, k: 0 },
-        p: { a: 0, k: [100, 100, 0] },
-        a: { a: 0, k: [0, 0, 0] },
-        s: {
-          a: 1,
-          k: [
-            { t: 0, s: [100, 100, 100] },
-            { t: 60, s: [140, 140, 100] },
-            { t: 120, s: [100, 100, 100] },
-          ],
-        },
-      },
-      shapes: [
-        {
-          ty: 'gr',
-          it: [
-            { ty: 'el', p: { a: 0, k: [0, 0] }, s: { a: 0, k: [42, 42] }, nm: 'Path' },
-            {
-              ty: 'fl',
-              c: { a: 0, k: [0.55, 0.44, 0.99, 1] },
-              o: { a: 0, k: 100 },
-              r: 1,
-              bm: 0,
-              nm: 'Fill',
-            },
-            {
-              ty: 'tr',
-              p: { a: 0, k: [0, 0] },
-              a: { a: 0, k: [0, 0] },
-              s: { a: 0, k: [100, 100] },
-              r: { a: 0, k: 0 },
-              o: { a: 0, k: 100 },
-              sk: { a: 0, k: 0 },
-              sa: { a: 0, k: 0 },
-              nm: 'Transform',
-            },
-          ],
-          nm: 'Group',
-        },
-      ],
-      ip: 0,
-      op: 120,
-      st: 0,
-      bm: 0,
-    },
-  ],
-};
+const PROFESSIONAL_FALLBACK_IMAGE =
+  '/assessment-images/professional-workplace/professional-workplace-01.webp';
 
 const VISUAL_MAP = {
   technical: {
     icon: FiCode,
-    title: 'Technical Decision Lens',
-    subtitle: 'Thinking about systems, constraints, and execution quality.',
     accent: '#38BDF8',
     softAccent: 'rgba(56, 189, 248, 0.24)',
     icons: [FiCode, FiCpu, FiGrid, FiLayers],
   },
   business: {
     icon: FiBarChart2,
-    title: 'Business Strategy Lens',
-    subtitle: 'Balancing outcomes, priorities, and trade-offs under pressure.',
     accent: '#22D3EE',
     softAccent: 'rgba(34, 211, 238, 0.24)',
     icons: [FiBarChart2, FiBriefcase, FiCompass, FiFlag],
   },
   creative: {
     icon: FiFeather,
-    title: 'Creative Synthesis Lens',
-    subtitle: 'Exploring novelty while keeping ideas practical and useful.',
     accent: '#A78BFA',
     softAccent: 'rgba(167, 139, 250, 0.24)',
     icons: [FiFeather, FiCompass, FiLayers, FiActivity],
   },
   leadership: {
     icon: FiUsers,
-    title: 'Leadership Impact Lens',
-    subtitle: 'Reading ownership, influence, and decision confidence in teams.',
     accent: '#34D399',
     softAccent: 'rgba(52, 211, 153, 0.24)',
     icons: [FiUsers, FiFlag, FiActivity, FiBriefcase],
   },
   general: {
     icon: FiActivity,
-    title: 'Adaptive Intelligence Lens',
-    subtitle: 'Measuring patterns that shape personality and career fit.',
     accent: '#60A5FA',
     softAccent: 'rgba(96, 165, 250, 0.24)',
     icons: [FiActivity, FiCompass, FiLayers, FiGrid],
   },
 };
 
-const VISUAL_IMAGE_FILES = {
-  technical: 'technical-context.svg',
-  business: 'business-context.svg',
-  creative: 'creative-context.svg',
-  leadership: 'leadership-context.svg',
-  general: 'general-context.svg',
-};
-
-const toDataUri = (svgMarkup) => `data:image/svg+xml;utf8,${encodeURIComponent(svgMarkup)}`;
-
-const buildFallbackImageDataUri = ({ visualKey = 'general', visual = VISUAL_MAP.general }) => {
-  const title = String(visual?.title || 'Context Frame');
-  const accent = String(visual?.accent || '#60A5FA');
-  const subtitle = String(visualKey || 'general').toUpperCase();
-
-  return toDataUri(`
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="420" viewBox="0 0 800 420">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0f1b32"/>
-      <stop offset="100%" stop-color="#091224"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.35" r="0.55">
-      <stop offset="0%" stop-color="${accent}" stop-opacity="0.45"/>
-      <stop offset="100%" stop-color="${accent}" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <rect width="800" height="420" rx="20" fill="url(#bg)"/>
-  <rect width="800" height="420" rx="20" fill="url(#glow)"/>
-  <rect x="38" y="34" width="724" height="352" rx="18" fill="none" stroke="${accent}" stroke-opacity="0.35"/>
-  <circle cx="130" cy="120" r="30" fill="${accent}" fill-opacity="0.22"/>
-  <circle cx="690" cy="300" r="46" fill="${accent}" fill-opacity="0.16"/>
-  <path d="M100 278 L235 170 L358 226 L480 132 L632 246" fill="none" stroke="${accent}" stroke-width="6" stroke-linecap="round" stroke-opacity="0.75"/>
-  <circle cx="235" cy="170" r="9" fill="${accent}"/>
-  <circle cx="358" cy="226" r="9" fill="${accent}"/>
-  <circle cx="480" cy="132" r="9" fill="${accent}"/>
-  <circle cx="632" cy="246" r="9" fill="${accent}"/>
-  <text x="72" y="74" fill="#d8ecff" font-size="26" font-family="Arial, sans-serif" font-weight="700">${title}</text>
-  <text x="72" y="104" fill="#9fbcdf" font-size="15" font-family="Arial, sans-serif" letter-spacing="1.5">${subtitle} CONTEXT VISUAL</text>
-</svg>`);
-};
-
 const inferVisualKey = (question = {}) => {
   const category = String(question?.category || '').toLowerCase();
   const trait = String(question?.trait || question?.traitTarget || '').toLowerCase();
 
-  if (/(software|technical|aptitude|system|code|engineering)/.test(category + trait)) {
+  if (/(software|technical|aptitude|system|code|engineering|analysis|analytic)/.test(category + trait)) {
     return 'technical';
   }
 
@@ -252,7 +69,7 @@ const inferVisualKey = (question = {}) => {
     return 'creative';
   }
 
-  if (/(leadership|team|social|conflict|agreeableness)/.test(category + trait)) {
+  if (/(leadership|team|social|conflict|agreeableness|collaboration)/.test(category + trait)) {
     return 'leadership';
   }
 
@@ -289,33 +106,56 @@ const MiniOrb = ({ color = '#38BDF8' }) => {
 };
 
 const QuestionVisualPanel = ({ question }) => {
-  const floatingRefs = useRef([]);
-  const publicBasePath = useMemo(() => {
-    const baseUrl = String(import.meta?.env?.BASE_URL || '').trim();
-    if (!baseUrl || baseUrl === '/') {
-      return '';
-    }
-
-    return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  }, []);
-
   const visualKey = useMemo(() => inferVisualKey(question), [question]);
   const visual = VISUAL_MAP[visualKey] || VISUAL_MAP.general;
   const VisualIcon = visual.icon;
-  const primaryImageSrc = useMemo(
-    () => `${publicBasePath}/visuals/${VISUAL_IMAGE_FILES[visualKey] || VISUAL_IMAGE_FILES.general}`,
-    [publicBasePath, visualKey]
-  );
-  const fallbackImageSrc = useMemo(
-    () => buildFallbackImageDataUri({ visualKey, visual }),
-    [visualKey, visual]
-  );
-  const [imageSrc, setImageSrc] = useState(primaryImageSrc);
+
+  const floatingRefs = useRef([]);
+  const imageFrameRef = useRef(null);
+  const imageRef = useRef(null);
+  const imageZoomTweenRef = useRef(null);
+  const parallaxTweenRef = useRef(null);
+
+  const [imageSrc, setImageSrc] = useState('');
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageMeta, setImageMeta] = useState({ source: '', category: '', keywords: [] });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const resolveImage = async () => {
+      setImageLoaded(false);
+      try {
+        const payload = await selectImage(question || {});
+        if (!isMounted) {
+          return;
+        }
+
+        setImageSrc(payload.url || PROFESSIONAL_FALLBACK_IMAGE);
+        setImageMeta({
+          source: payload.source || '',
+          category: payload.category || '',
+          keywords: Array.isArray(payload.keywords) ? payload.keywords : [],
+        });
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setImageSrc(PROFESSIONAL_FALLBACK_IMAGE);
+        setImageMeta({ source: 'fallback', category: 'professional-workplace', keywords: [] });
+      }
+    };
+
+    resolveImage();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [question?.questionId, question?.id, question?.text, question?.trait, question?.category]);
 
   useEffect(() => {
     const refs = floatingRefs.current.filter(Boolean);
-
     if (!refs.length) {
       return () => {};
     }
@@ -339,9 +179,81 @@ const QuestionVisualPanel = ({ question }) => {
   }, [visualKey]);
 
   useEffect(() => {
-    setImageLoaded(false);
-    setImageSrc(primaryImageSrc);
-  }, [primaryImageSrc]);
+    if (!imageFrameRef.current) {
+      return () => {};
+    }
+
+    gsap.fromTo(
+      imageFrameRef.current,
+      { autoAlpha: 0, y: 14, scale: 0.98 },
+      { autoAlpha: 1, y: 0, scale: 1, duration: 0.45, ease: 'power3.out' }
+    );
+
+    return () => {};
+  }, [imageSrc]);
+
+  useEffect(() => {
+    if (!imageLoaded || !imageRef.current) {
+      return () => {};
+    }
+
+    imageZoomTweenRef.current?.kill();
+    imageZoomTweenRef.current = gsap.to(imageRef.current, {
+      scale: 1.06,
+      duration: 4.8,
+      ease: 'sine.inOut',
+      yoyo: true,
+      repeat: -1,
+    });
+
+    return () => {
+      imageZoomTweenRef.current?.kill();
+      imageZoomTweenRef.current = null;
+    };
+  }, [imageLoaded, imageSrc]);
+
+  useEffect(() => {
+    if (!imageFrameRef.current || !imageRef.current) {
+      return () => {};
+    }
+
+    const frameNode = imageFrameRef.current;
+    const imageNode = imageRef.current;
+
+    const handleMouseMove = (event) => {
+      const rect = frameNode.getBoundingClientRect();
+      const relativeX = (event.clientX - rect.left) / rect.width - 0.5;
+      const relativeY = (event.clientY - rect.top) / rect.height - 0.5;
+
+      parallaxTweenRef.current?.kill();
+      parallaxTweenRef.current = gsap.to(imageNode, {
+        x: relativeX * 16,
+        y: relativeY * 10,
+        duration: 0.8,
+        ease: 'power2.out',
+      });
+    };
+
+    const handleMouseLeave = () => {
+      parallaxTweenRef.current?.kill();
+      parallaxTweenRef.current = gsap.to(imageNode, {
+        x: 0,
+        y: 0,
+        duration: 0.9,
+        ease: 'power2.out',
+      });
+    };
+
+    frameNode.addEventListener('mousemove', handleMouseMove);
+    frameNode.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      frameNode.removeEventListener('mousemove', handleMouseMove);
+      frameNode.removeEventListener('mouseleave', handleMouseLeave);
+      parallaxTweenRef.current?.kill();
+      parallaxTweenRef.current = null;
+    };
+  }, [imageSrc]);
 
   return (
     <aside
@@ -352,43 +264,33 @@ const QuestionVisualPanel = ({ question }) => {
       }}
       aria-label="Question context visualization"
     >
-      <header className="question-visual-panel__head">
-        <span className="question-visual-panel__icon" aria-hidden="true">
-          <VisualIcon />
-        </span>
-        <div>
-          <p className="question-visual-panel__kicker">Context Frame</p>
-          <h3>{visual.title}</h3>
-        </div>
-      </header>
+      <div className="question-visual-panel__image-frame" ref={imageFrameRef} aria-label="Context image frame">
+        {!imageLoaded ? <div className="question-visual-panel__image-loader">Loading context image...</div> : null}
 
-      <p className="question-visual-panel__subtitle">{visual.subtitle}</p>
-
-      <div className="question-visual-panel__image-frame" aria-label="Context image frame">
-        {!imageLoaded ? (
-          <div className="question-visual-panel__image-loader">Loading context image...</div>
-        ) : null}
         <img
-          src={imageSrc}
-          alt={`${visual.title} context illustration`}
+          ref={imageRef}
+          src={imageSrc || PROFESSIONAL_FALLBACK_IMAGE}
+          alt="Question context"
           className={`question-visual-panel__image ${imageLoaded ? 'is-ready' : ''}`}
-          loading="eager"
+          loading="lazy"
           decoding="async"
           onLoad={() => setImageLoaded(true)}
           onError={() => {
-            if (imageSrc !== fallbackImageSrc) {
-              setImageLoaded(false);
-              setImageSrc(fallbackImageSrc);
-              return;
-            }
-
-            setImageLoaded(true);
+            setImageLoaded(false);
+            setImageSrc(PROFESSIONAL_FALLBACK_IMAGE);
           }}
         />
-      </div>
 
-      <div className="question-visual-panel__lottie" aria-hidden="true">
-        <Lottie animationData={PULSE_LOTTIE} loop autoplay />
+        <div className="question-visual-panel__image-overlay" aria-hidden="true" />
+
+        <div className="question-visual-panel__image-caption">
+          <span className="question-visual-panel__icon" aria-hidden="true">
+            <VisualIcon />
+          </span>
+          <p>
+            {imageMeta.category || visualKey} context · {imageMeta.source || 'local'}
+          </p>
+        </div>
       </div>
 
       <div className="question-visual-panel__canvas" aria-hidden="true">
@@ -414,10 +316,6 @@ const QuestionVisualPanel = ({ question }) => {
           </span>
         ))}
       </div>
-
-      <p className="question-visual-panel__meta">
-        Trait Focus: <strong>{String(question?.trait || question?.traitTarget || 'Adaptive').replace(/_/g, ' ')}</strong>
-      </p>
     </aside>
   );
 };

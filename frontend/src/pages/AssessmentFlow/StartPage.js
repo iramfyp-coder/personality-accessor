@@ -17,6 +17,7 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Skeleton from '../../components/ui/Skeleton';
 import Loader from '../../components/ui/Loader';
+import LoaderOverlay from '../../components/ui/LoaderOverlay';
 import { useAuth } from '../../hooks/useAuth';
 import {
   openAssessmentProgressStream,
@@ -200,6 +201,11 @@ const StartAssessmentFlowPage = () => {
   const isUploading = uploadMutation.isPending;
   const isGenerating = startMutation.isPending;
   const isBusy = isUploading || isGenerating;
+  const loaderMessage = isUploading
+    ? 'Analyzing your CV...'
+    : isGenerating
+    ? 'Generating adaptive questions...'
+    : '';
 
   const canResume = useMemo(
     () => currentStage === 'questionnaire' || currentStage === 'behavior' || currentStage === 'result',
@@ -494,6 +500,7 @@ const StartAssessmentFlowPage = () => {
 
   return (
     <main className="app-page phase4-start-page">
+      <LoaderOverlay visible={isBusy} message={loaderMessage} />
       <div className="page-shell">
         <Card
           title="Start AI Career Assessment"

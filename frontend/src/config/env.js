@@ -70,6 +70,11 @@ export const GOOGLE_CLIENT_ID = readEnvValue({
   legacyKey: 'REACT_APP_GOOGLE_CLIENT_ID',
 });
 
+export const UNSPLASH_ACCESS_KEY = readEnvValue({
+  viteKey: 'VITE_UNSPLASH_ACCESS_KEY',
+  legacyKey: 'REACT_APP_UNSPLASH_ACCESS_KEY',
+});
+
 export const APP_RUNTIME_ENV =
   readEnvValue({
     viteKey: 'VITE_APP_ENV',
@@ -79,5 +84,6 @@ export const APP_RUNTIME_ENV =
 export const APP_ENV = {
   API_URL,
   GOOGLE_CLIENT_ID,
+  UNSPLASH_ACCESS_KEY,
   APP_RUNTIME_ENV,
 };
