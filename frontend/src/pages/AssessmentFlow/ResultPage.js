@@ -7,6 +7,7 @@ import {
   FiCpu,
   FiDownload,
   FiRefreshCw,
+  FiShare2,
   FiSend,
   FiTrendingUp,
   FiUser,
@@ -34,6 +35,7 @@ import {
 } from '../../hooks/useAssessmentFlow';
 import { downloadAssessmentFlowPdf } from '../../api/assessmentFlowApi';
 import { clearAssessmentFlowState, readAssessmentFlowState } from '../../utils/assessmentFlowStorage';
+import { AVATAR_EVENTS, useAvatarEvents } from '../../components/avatar/AvatarEvents';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -85,6 +87,7 @@ const AssessmentFlowResultPage = () => {
   const resultQuery = useAssessmentFlowResultQuery(sessionId, Boolean(sessionId));
   const chatMutation = useCareerChatMutation();
   const whyNotMutation = useWhyNotCareerMutation();
+  const { emit } = useAvatarEvents();
 
   const [message, setMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
@@ -92,6 +95,7 @@ const AssessmentFlowResultPage = () => {
   const [chatError, setChatError] = useState('');
   const [chatTyping, setChatTyping] = useState(false);
   const [pdfError, setPdfError] = useState('');
+  const [shareStatus, setShareStatus] = useState('');
   const [whyNotCareer, setWhyNotCareer] = useState('');
   const [whyNotResult, setWhyNotResult] = useState(null);
   const [whyNotError, setWhyNotError] = useState('');
@@ -99,14 +103,28 @@ const AssessmentFlowResultPage = () => {
   const sectionsRef = useRef([]);
   const chatFeedRef = useRef(null);
   const downloadButtonRef = useRef(null);
+  const resultsLoadedRef = useRef(false);
 
   const result = resultQuery.data?.result || null;
+
+  useEffect(() => {
+    if (resultQuery.isPending || chatMutation.isPending) {
+      emit(AVATAR_EVENTS.AI_LOADING, {
+        long: true,
+        targetKey: 'results-hero',
+      });
+    }
+  }, [chatMutation.isPending, emit, resultQuery.isPending]);
 
   useEffect(() => {
     if (Array.isArray(resultQuery.data?.history)) {
       setChatHistory(resultQuery.data.history);
     }
   }, [resultQuery.data?.history]);
+
+  useEffect(() => {
+    resultsLoadedRef.current = false;
+  }, [sessionId]);
 
   useEffect(() => {
     if (!chatFeedRef.current) {
@@ -166,6 +184,18 @@ const AssessmentFlowResultPage = () => {
     }, {});
   }, [result]);
   const hasHeatmapData = Object.keys(heatmapFacetScores).length > 0;
+
+  useEffect(() => {
+    if (!result || resultsLoadedRef.current) {
+      return;
+    }
+
+    emit(AVATAR_EVENTS.RESULTS_LOADED, {
+      targetKey: 'results-hero',
+      message: 'Here is your personality profile. Scroll to see your roadmap.',
+    });
+    resultsLoadedRef.current = true;
+  }, [emit, result]);
 
   useEffect(() => {
     if (!result || prefersReducedMotion) {
@@ -250,6 +280,9 @@ const AssessmentFlowResultPage = () => {
     setChatError('');
     setMessage('');
     setChatTyping(true);
+    emit(AVATAR_EVENTS.CHAT_MESSAGE, {
+      targetKey: 'chatbot-panel',
+    });
 
     const optimisticTimestamp = new Date().toISOString();
     setChatHistory((current) => [
@@ -265,6 +298,9 @@ const AssessmentFlowResultPage = () => {
       const payload = await chatMutation.mutateAsync({
         sessionId,
         message: text,
+      });
+      emit(AVATAR_EVENTS.CHAT_RESPONSE, {
+        targetKey: 'chatbot-panel',
       });
       setChatHistory((current) => (Array.isArray(payload.history) ? payload.history : current));
       setFollowUpPrompts(
@@ -312,6 +348,28 @@ const AssessmentFlowResultPage = () => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       setPdfError(error.message || 'Unable to download PDF report right now.');
+    }
+  };
+
+  const shareReport = async () => {
+    setShareStatus('');
+    const sharePayload = {
+      title: 'AI Career Intelligence Report',
+      text: `Top Career: ${topCareer?.career || 'Career fit insights available'}`,
+      url: window.location.href,
+    };
+
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share(sharePayload);
+        setShareStatus('Report share sheet opened.');
+        return;
+      }
+
+      await navigator.clipboard.writeText(window.location.href);
+      setShareStatus('Report link copied to clipboard.');
+    } catch (error) {
+      setShareStatus('Unable to share this report on this device.');
     }
   };
 
@@ -383,10 +441,16 @@ const AssessmentFlowResultPage = () => {
   const confidencePercent = Math.max(0, Math.min(100, Math.round(result.confidence_score || 0)));
 
   return (
-    <main className="app-page phase3-result-page">
+    <main className="app-page phase3-result-page" data-avatar-section="results-main">
       <LoaderOverlay visible={resultQuery.isPending} message="Building your personality profile..." />
       <div className="page-shell result-shell phase3-result-shell">
-        <section data-scroll-reveal className="phase3-result-hero phase3-result-section" ref={(node) => { sectionsRef.current[0] = node; }}>
+        <section
+          data-scroll-reveal
+          className="phase3-result-hero phase3-result-section"
+          ref={(node) => { sectionsRef.current[0] = node; }}
+          data-avatar-section="result-hero"
+          data-avatar-target="results-hero"
+        >
           <div>
             <p className="page-header__eyebrow">AI Career Intelligence Report</p>
             <h1 className="page-header__title">{result.personality_type_label || result.personality_type}</h1>
@@ -400,10 +464,21 @@ const AssessmentFlowResultPage = () => {
           </div>
           <div className="phase3-result-hero__stats">
             <div className="phase3-result-hero__actions">
-              <Button variant="ghost" onClick={handleBackToDashboard}>
+              <Button
+                variant="ghost"
+                onClick={handleBackToDashboard}
+                data-avatar-action="back-dashboard"
+                data-avatar-target="results-hero"
+              >
                 <FiArrowLeft /> Back to Dashboard
               </Button>
-              <Button variant="secondary" onClick={handleRetakeAssessment}>
+              <Button
+                variant="secondary"
+                onClick={handleRetakeAssessment}
+                data-avatar-action="retake-assessment"
+                data-avatar-target="results-hero"
+                data-avatar-hint="Retake if you want to compare a new profile run."
+              >
                 <FiRefreshCw /> Retake Assessment
               </Button>
             </div>
@@ -428,17 +503,38 @@ const AssessmentFlowResultPage = () => {
               </strong>
               <span>{String(result.confidence_band || 'low').toUpperCase()}</span>
             </article>
-            <div ref={downloadButtonRef}>
-              <Button variant="ghost" onClick={downloadPdf}>
+            <div ref={downloadButtonRef} data-avatar-target="report-download" className="phase3-download-actions">
+              <Button
+                variant="ghost"
+                onClick={downloadPdf}
+                data-avatar-action="download-report"
+                data-avatar-target="report-download"
+                data-avatar-hint="Download your PDF report here."
+              >
                 <FiDownload /> Download Report
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={shareReport}
+                data-avatar-action="share-report"
+                data-avatar-target="report-download"
+                data-avatar-hint="Share this report link."
+              >
+                <FiShare2 /> Share Report
               </Button>
             </div>
           </div>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[1] = node; }}>
+        <section
+          data-scroll-reveal
+          className="phase3-result-section"
+          ref={(node) => { sectionsRef.current[1] = node; }}
+          data-avatar-section="result-confidence"
+          data-avatar-target="result-confidence-meter"
+        >
           <Card title="Confidence Meter" subtitle="Top-career confidence after consistency adjustment">
-            <div className="confidence-meter phase3-confidence-meter">
+            <div className="confidence-meter phase3-confidence-meter" data-avatar-target="result-confidence-meter">
               <div className="confidence-meter__track">
                 <div
                   className={`confidence-meter__bar confidence-meter__bar--${confidenceBand}`}
@@ -453,12 +549,18 @@ const AssessmentFlowResultPage = () => {
           </Card>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-charts phase3-result-section" ref={(node) => { sectionsRef.current[2] = node; }}>
+        <section
+          data-scroll-reveal
+          className="phase3-result-charts phase3-result-section"
+          ref={(node) => { sectionsRef.current[2] = node; }}
+          data-avatar-section="result-profile"
+          data-avatar-target="result-profile-chart"
+        >
           <Card title="OCEAN Radar" subtitle="Personality profile">
             <TraitRadarChart key={`radar-${result.meta?.generated_at || 'latest'}`} traits={traits} height={320} />
           </Card>
 
-          <Card title="3D Trait Sphere" subtitle="Interactive trait field">
+          <Card title="3D Trait Sphere" subtitle="Interactive trait field" className="result-profile-chart" >
             <TraitSphere data={threeDPayload} />
           </Card>
         </section>
@@ -497,15 +599,26 @@ const AssessmentFlowResultPage = () => {
           </Card>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[5] = node; }}>
+        <section
+          data-scroll-reveal
+          className="phase3-result-section"
+          ref={(node) => { sectionsRef.current[5] = node; }}
+          data-avatar-section="result-career-landscape"
+        >
           <Card title="Career Match Landscape" subtitle="Overall, personality, and career fit">
             <CareerAlignmentChart recommendations={recommendations} />
           </Card>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[6] = node; }}>
+        <section
+          data-scroll-reveal
+          className="phase3-result-section"
+          ref={(node) => { sectionsRef.current[6] = node; }}
+          data-avatar-section="result-career-match"
+          data-avatar-target="career-matches"
+        >
           <Card title="Career Matches" subtitle="Why each role matched and what to build next">
-            <div className="phase3-career-grid">
+            <div className="phase3-career-grid" data-avatar-target="career-matches">
               {recommendations.map((career, index) => (
                 <article className="phase3-career-card" key={`${career.career}-${index}`}>
                   <header>
@@ -585,9 +698,15 @@ const AssessmentFlowResultPage = () => {
           </Card>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[9] = node; }}>
+        <section
+          data-scroll-reveal
+          className="phase3-result-section"
+          ref={(node) => { sectionsRef.current[9] = node; }}
+          data-avatar-section="result-roadmap"
+          data-avatar-target="learning-roadmap"
+        >
           <Card title="Learning Roadmap" subtitle="Sequenced growth path">
-            <div className="intel-timeline">
+            <div className="intel-timeline" data-avatar-target="learning-roadmap">
               {(result.career_roadmap || []).map((step, index) => (
                 <article key={`${step.stage}-${index}`} className="intel-timeline__item is-expanded">
                   <div className="intel-timeline__details" style={{ maxHeight: '100%' }}>
@@ -600,9 +719,15 @@ const AssessmentFlowResultPage = () => {
           </Card>
         </section>
 
-        <section data-scroll-reveal className="phase3-result-section" ref={(node) => { sectionsRef.current[10] = node; }}>
+        <section
+          data-scroll-reveal
+          className="phase3-result-section"
+          ref={(node) => { sectionsRef.current[10] = node; }}
+          data-avatar-section="result-chat"
+          data-avatar-target="chatbot-panel"
+        >
           <Card title="AI Career Chatbot" subtitle="Ask follow-up questions about your profile">
-            <div className="phase4-chat-shell">
+            <div className="phase4-chat-shell" data-avatar-target="chatbot-panel">
               <div className="phase4-chat-suggestions">
                 {followUps.map((prompt) => (
                   <button
@@ -611,6 +736,8 @@ const AssessmentFlowResultPage = () => {
                     className="phase4-chat-suggestion"
                     onClick={() => submitChat(prompt)}
                     disabled={chatMutation.isPending}
+                    data-avatar-action="chat-suggestion"
+                    data-avatar-target="chatbot-panel"
                   >
                     {prompt}
                   </button>
@@ -666,12 +793,19 @@ const AssessmentFlowResultPage = () => {
                     }
                   }}
                 />
-                <Button onClick={() => submitChat()} loading={chatMutation.isPending}>
+                <Button
+                  onClick={() => submitChat()}
+                  loading={chatMutation.isPending}
+                  data-avatar-action="chat-send"
+                  data-avatar-target="chatbot-panel"
+                  data-avatar-hint="Send your question and I will explain based on your profile."
+                >
                   <FiSend /> Ask
                 </Button>
               </div>
               {chatError ? <p className="ui-message ui-message--error">{chatError}</p> : null}
               {pdfError ? <p className="ui-message ui-message--error">{pdfError}</p> : null}
+              {shareStatus ? <p className="ui-message ui-message--neutral">{shareStatus}</p> : null}
             </div>
           </Card>
         </section>

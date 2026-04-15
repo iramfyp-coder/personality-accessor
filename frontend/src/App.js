@@ -16,6 +16,8 @@ import ProtectedRoute from './components/ui/ProtectedRoute';
 import AnimatedBackground from './components/ui/AnimatedBackground';
 import PageTransition from './components/motion/PageTransition';
 import { useAuth } from './hooks/useAuth';
+import AvatarController from './components/avatar/AvatarController';
+import { AvatarEventProvider } from './components/avatar/AvatarEvents';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -106,6 +108,7 @@ const AppRoutes = () => {
   return (
     <>
       <AnimatedBackground />
+      <AvatarController />
       <div data-barba="wrapper">
         <AnimatePresence mode="wait" initial={false}>
           <Routes location={location} key={`${location.pathname}${location.search}`}>
@@ -163,6 +166,22 @@ const AppRoutes = () => {
               )}
             />
             <Route
+              path="/results"
+              element={withTransition(
+                <ProtectedRoute>
+                  <Navigate to="/assessment/result" replace />
+                </ProtectedRoute>
+              )}
+            />
+            <Route
+              path="/reports"
+              element={withTransition(
+                <ProtectedRoute>
+                  <Navigate to="/dashboard" replace />
+                </ProtectedRoute>
+              )}
+            />
+            <Route
               path="/result/:assessmentId"
               element={withTransition(
                 <ProtectedRoute>
@@ -185,7 +204,9 @@ const AppRoutes = () => {
 const App = () => {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <AvatarEventProvider>
+        <AppRoutes />
+      </AvatarEventProvider>
     </BrowserRouter>
   );
 };

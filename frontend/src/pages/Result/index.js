@@ -18,6 +18,7 @@ import { useAuth } from '../../hooks/useAuth';
 import mapTraitsTo3DData from '../../utils/traitMapper';
 import { getPersonalityProfile } from '../../utils/personalityProfiles';
 import { getDominantTrait, normalizeTraits } from '../../utils/traits';
+import { AVATAR_EVENTS, useAvatarEvents } from '../../components/avatar/AvatarEvents';
 
 const formatDate = (value) => {
   if (!value) {
@@ -75,6 +76,8 @@ const ResultPage = () => {
   const [selectedCompareAssessmentId, setSelectedCompareAssessmentId] = useState('');
   const [aiReportResponse, setAiReportResponse] = useState(null);
   const [aiStatusMessage, setAiStatusMessage] = useState('');
+  const [shareStatus, setShareStatus] = useState('');
+  const { emit } = useAvatarEvents();
 
   const routeResult = location.state?.result || null;
   const requestedCompareAssessmentId = String(location.state?.compareWith || '');
@@ -177,6 +180,26 @@ const ResultPage = () => {
   const insightEngine = aiReportResponse?.insightEngine || report?.insightEngine || null;
   const careerEngine = toCareerList(aiReportResponse?.careerEngine || report?.careerEngine);
 
+  useEffect(() => {
+    if (reportQuery.isPending || aiReportMutation.isPending) {
+      emit(AVATAR_EVENTS.AI_LOADING, {
+        long: true,
+        targetKey: 'report-header',
+      });
+    }
+  }, [aiReportMutation.isPending, emit, reportQuery.isPending]);
+
+  useEffect(() => {
+    if (!report) {
+      return;
+    }
+
+    emit(AVATAR_EVENTS.RESULTS_LOADED, {
+      targetKey: 'report-header',
+      message: 'Here is your personality summary and report details.',
+    });
+  }, [emit, report]);
+
   const handleGenerateAiReport = async (forceRefresh = false) => {
     if (!assessmentId) {
       return;
@@ -198,6 +221,29 @@ const ResultPage = () => {
       );
     } catch (error) {
       setAiStatusMessage('');
+    }
+  };
+
+  const handleShareReport = async () => {
+    setShareStatus('');
+
+    const sharePayload = {
+      title: 'Personality Assessment Report',
+      text: `${profile.name} profile report`,
+      url: window.location.href,
+    };
+
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share(sharePayload);
+        setShareStatus('Share sheet opened.');
+        return;
+      }
+
+      await navigator.clipboard.writeText(window.location.href);
+      setShareStatus('Report link copied to clipboard.');
+    } catch (error) {
+      setShareStatus('Unable to share report on this device.');
     }
   };
 
@@ -231,11 +277,11 @@ const ResultPage = () => {
   }
 
   return (
-    <main className="app-page">
+    <main className="app-page" data-avatar-section="legacy-report-main">
       <div className="page-shell result-shell">
-        <header className="page-header">
+        <header className="page-header" data-avatar-section="legacy-report-summary" data-avatar-target="report-header">
           <FadeIn>
-            <div>
+            <div data-avatar-target="report-header">
               <p className="page-header__eyebrow">Assessment Report</p>
               <h1 className="page-header__title">{profile.name} Profile</h1>
               <p className="page-header__subtitle">Generated on {formatDate(report.createdAt)}</p>
@@ -243,19 +289,33 @@ const ResultPage = () => {
           </FadeIn>
           <FadeIn delay={0.06}>
             <div className="page-header__actions">
-              <Link className="history-item__link" to="/dashboard">
+              <Link className="history-item__link" to="/dashboard" data-avatar-action="back-dashboard" data-avatar-target="report-header">
                 Back to Dashboard
               </Link>
-              <Button variant="ghost" onClick={() => navigate('/assessment/start')}>
+              <Button
+                variant="ghost"
+                onClick={() => navigate('/assessment/start')}
+                data-avatar-action="retake-assessment"
+                data-avatar-target="report-header"
+              >
                 Retake Assessment
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleShareReport}
+                data-avatar-action="share-report"
+                data-avatar-target="report-header"
+                data-avatar-hint="Share this report link."
+              >
+                Share Report
               </Button>
             </div>
           </FadeIn>
         </header>
 
-        <section className="result-sections">
+        <section className="result-sections" data-avatar-section="legacy-report-sections">
           <Card title="Summary" subtitle="Dominant trait highlight">
-            <div className="dominant-trait">
+            <div className="dominant-trait" data-avatar-target="report-summary">
               <span className="dominant-trait__badge">{dominantTrait}</span>
               <div>
                 <h3>{profile.traitName}</h3>
@@ -333,6 +393,9 @@ const ResultPage = () => {
                   variant={aiReport ? 'ghost' : 'primary'}
                   onClick={() => handleGenerateAiReport(Boolean(aiReport))}
                   loading={aiReportMutation.isPending}
+                  data-avatar-action="generate-ai-report"
+                  data-avatar-target="report-summary"
+                  data-avatar-hint="Generate detailed AI insights for this report."
                 >
                   {aiReport ? 'Regenerate AI Report' : 'Generate AI Report'}
                 </Button>
@@ -340,6 +403,7 @@ const ResultPage = () => {
             }
           >
             {aiStatusMessage && <p className="ui-message ui-message--success">{aiStatusMessage}</p>}
+            {shareStatus && <p className="ui-message ui-message--neutral">{shareStatus}</p>}
 
             {aiReportMeta?.generatedAt && (
               <p className="ui-message ui-message--neutral">

@@ -66,7 +66,7 @@ export const startAdaptiveAssessment = async ({
       skipCv,
     },
     {
-      timeout: 180000,
+      timeout: 45000,
     }
   );
 

@@ -12,6 +12,7 @@ import {
   readAssessmentFlowState,
   saveAssessmentFlowState,
 } from '../../utils/assessmentFlowStorage';
+import { AVATAR_EVENTS, useAvatarEvents } from '../../components/avatar/AvatarEvents';
 
 const MIN_LENGTH = 40;
 
@@ -25,6 +26,7 @@ const BehaviorAssessmentPage = () => {
 
   const questionQuery = useAdaptiveQuestionQuery(sessionId, Boolean(sessionId));
   const answerMutation = useSubmitAdaptiveAnswerMutation();
+  const { emit } = useAvatarEvents();
 
   const prompt = questionQuery.data?.behaviorPrompt || null;
   const stage = questionQuery.data?.session?.stage || 'behavior';
@@ -59,6 +61,15 @@ const BehaviorAssessmentPage = () => {
     });
   }, [auth.userId, questionQuery.data, sessionId]);
 
+  useEffect(() => {
+    if (questionQuery.isPending || answerMutation.isPending) {
+      emit(AVATAR_EVENTS.AI_LOADING, {
+        long: true,
+        targetKey: 'behavior-card',
+      });
+    }
+  }, [answerMutation.isPending, emit, questionQuery.isPending]);
+
   const handleSubmit = async () => {
     if (!prompt) {
       return;
@@ -81,6 +92,10 @@ const BehaviorAssessmentPage = () => {
       });
 
       if (payload.completedAssessment) {
+        emit(AVATAR_EVENTS.ASSESSMENT_COMPLETE, {
+          progress: 100,
+          targetKey: 'behavior-card',
+        });
         saveAssessmentFlowState(auth.userId, {
           sessionId,
           stage: 'result',
@@ -125,18 +140,24 @@ const BehaviorAssessmentPage = () => {
   }
 
   return (
-    <main className="app-page">
+    <main className="app-page" data-avatar-section="behavior-main">
       <div className="page-shell">
         <Card
           title="Behavioral Paragraph Analysis"
           subtitle={`Prompt ${prompt.index + 1} of ${prompt.total}`}
+          className="behavior-card"
         >
-          <p style={{ marginBottom: 12 }}>{prompt.prompt}</p>
+          <div data-avatar-target="behavior-card" data-avatar-section="behavior-prompt">
+            <p style={{ marginBottom: 12 }}>{prompt.prompt}</p>
+          </div>
           <textarea
             className="ui-input"
             style={{ minHeight: 220, width: '100%' }}
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => {
+              setText(event.target.value);
+              emit(AVATAR_EVENTS.INPUT_TYPING, { targetKey: 'behavior-card' });
+            }}
             placeholder="Write a concrete example with context, action, and outcome."
           />
           <p className="ui-message ui-message--neutral">
@@ -145,10 +166,21 @@ const BehaviorAssessmentPage = () => {
           {errorMessage ? <p className="ui-message ui-message--error">{errorMessage}</p> : null}
 
           <div style={{ marginTop: 14, display: 'flex', gap: 12 }}>
-            <Button onClick={handleSubmit} loading={answerMutation.isPending}>
+            <Button
+              onClick={handleSubmit}
+              loading={answerMutation.isPending}
+              data-avatar-action="behavior-submit"
+              data-avatar-target="behavior-card"
+              data-avatar-hint="Save your behavioral response and continue."
+            >
               Save & Continue
             </Button>
-            <Button variant="ghost" onClick={() => navigate('/assessment/start')}>
+            <Button
+              variant="ghost"
+              onClick={() => navigate('/assessment/start')}
+              data-avatar-action="behavior-exit"
+              data-avatar-target="behavior-card"
+            >
               Exit
             </Button>
           </div>

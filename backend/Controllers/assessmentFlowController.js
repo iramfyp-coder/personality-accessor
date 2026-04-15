@@ -12,6 +12,11 @@ const {
   shouldStopAssessmentEarly,
 } = require('../services/assessment/question-engine.service');
 const {
+  enqueueRemainingQuestions,
+  isQuestionGenerationPending,
+  setQuestionGenerationStatus,
+} = require('../services/assessment/question-queue.service');
+const {
   getOrCreateInProgressSession,
   getActiveInProgressSession,
   getSessionForUser,
@@ -48,6 +53,8 @@ const {
 const MIN_BEHAVIOR_ANSWER_LENGTH = 4;
 const MIN_TEXT_ANSWER_LENGTH = 4;
 const USER_ROLES = ['student', 'graduate', 'professional'];
+const FIRST_QUESTION_BATCH_SIZE = 5;
+const TARGET_QUESTION_TOTAL = 22;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const toText = (value) => String(value || '').trim();
@@ -61,6 +68,16 @@ const toTextList = (value, limit = 24) => {
     .filter(Boolean)
     .slice(0, limit);
 };
+const mergeUniqueTextLists = (...lists) =>
+  Array.from(
+    new Set(
+      lists.flatMap((list) =>
+        (Array.isArray(list) ? list : [])
+          .map((item) => toText(item))
+          .filter(Boolean)
+      )
+    )
+  );
 
 const parseMaybeJsonObject = (value) => {
   if (!value) {
@@ -217,6 +234,46 @@ const toProfileRawText = ({ profile = {}, userRole = '' }) => {
   }
 
   return parts.join('\n');
+};
+
+const toParsedProfileFromCvData = ({ cvData = {}, existingProfile = {} } = {}) => {
+  const existingSubjects = Array.isArray(existingProfile.subjects) ? existingProfile.subjects : [];
+  const existingSkills = Array.isArray(existingProfile.skills) ? existingProfile.skills : [];
+  const existingInterests = Array.isArray(existingProfile.interests) ? existingProfile.interests : [];
+  const existingPreferred = Array.isArray(existingProfile.preferredCareers)
+    ? existingProfile.preferredCareers
+    : [];
+
+  const cvSubjects = Array.isArray(cvData.subjects) ? cvData.subjects : [];
+  const cvSkills = Array.isArray(cvData.skills)
+    ? cvData.skills.map((skill) => toText(skill?.name || skill)).filter(Boolean)
+    : [];
+  const cvInterests = Array.isArray(cvData.interests) ? cvData.interests : [];
+  const cvPreferred = Array.isArray(cvData.careerSignals)
+    ? cvData.careerSignals
+    : Array.isArray(cvData.career_signals)
+    ? cvData.career_signals
+    : [];
+  const sourceDomain = toText(cvData.source_domain).replace(/[-_]+/g, ' ');
+
+  const subjects = mergeUniqueTextLists(existingSubjects, cvSubjects).slice(0, 24);
+  const skills = mergeUniqueTextLists(existingSkills, cvSkills).slice(0, 36);
+  const interests = mergeUniqueTextLists(existingInterests, cvInterests).slice(0, 24);
+  const preferredCareers = mergeUniqueTextLists(existingPreferred, cvPreferred).slice(0, 24);
+
+  const explicitField = toText(existingProfile.field);
+  const fallbackField = sourceDomain || toText(subjects[0]);
+
+  return {
+    field: explicitField || fallbackField || '',
+    subjects,
+    skills,
+    interests,
+    preferredCareers,
+    age: Number(existingProfile.age) || null,
+    gender: toText(existingProfile.gender).toLowerCase(),
+    marks: Array.isArray(existingProfile.marks) ? existingProfile.marks : [],
+  };
 };
 
 const toQuestionIdentity = (question = {}) => toText(question.questionId || question.id);
@@ -721,11 +778,27 @@ const uploadCv = async (req, res, next) => {
     if (normalizedRole) {
       session.userRole = normalizedRole;
     }
-    if (normalizedProfile) {
-      session.userProfile = normalizedProfile;
-    }
+    const existingUserProfile =
+      session.userProfile && typeof session.userProfile === 'object'
+        ? session.userProfile
+        : {};
     session.cvRawText = analysis.rawText;
     session.cvData = normalizeCvData(analysis.parsed);
+    const parsedProfile = toParsedProfileFromCvData({
+      cvData: session.cvData,
+      existingProfile: normalizedProfile || existingUserProfile,
+    });
+    session.userProfile = {
+      ...(normalizedProfile || existingUserProfile),
+      field: parsedProfile.field,
+      subjects: parsedProfile.subjects,
+      skills: parsedProfile.skills,
+      interests: parsedProfile.interests,
+      preferredCareers: parsedProfile.preferredCareers,
+      age: parsedProfile.age,
+      gender: parsedProfile.gender,
+      marks: parsedProfile.marks,
+    };
     session.aiProfile = undefined;
     session.profileVector = undefined;
     session.smartIntro = undefined;
@@ -778,6 +851,7 @@ const uploadCv = async (req, res, next) => {
       data: {
         session: toPublicSession(session),
         cvData: session.cvData,
+        parsedProfile,
       },
       message: 'CV uploaded and analyzed successfully',
     });
@@ -829,7 +903,7 @@ const startAdaptiveAssessment = async (req, res, next) => {
       event: {
         stage: 'questionnaire',
         status: 'processing',
-        message: 'Generating adaptive questions...',
+        message: 'Preparing your personalized questions…',
       },
     });
 
@@ -840,6 +914,8 @@ const startAdaptiveAssessment = async (req, res, next) => {
       cvRawText: session.cvRawText || '',
       askedQuestions: user?.askedQuestions || [],
       aiProfile: session.aiProfile || undefined,
+      targetCount: FIRST_QUESTION_BATCH_SIZE,
+      includeSupplemental: false,
     });
 
     if (user) {
@@ -900,16 +976,19 @@ const startAdaptiveAssessment = async (req, res, next) => {
       questionnaireConfidence: 0,
       shouldStopEarly: false,
       consistencyScore: 0,
-      targetQuestionCount: Number(questionOutput.targetQuestionCount || session.questionPlan.length || 0),
+      targetQuestionCount: TARGET_QUESTION_TOTAL,
       cvComplexity: Number(questionOutput.cvComplexity || 0),
       confidenceExtensionApplied: false,
       inconsistencyExtensionApplied: false,
       extensionReasons: [],
-      prefetchedSupplementalQuestionPlan: Array.isArray(
-        questionOutput.prefetchedSupplementalQuestionPlan
-      )
-        ? questionOutput.prefetchedSupplementalQuestionPlan
-        : [],
+      prefetchedSupplementalQuestionPlan: [],
+      questionGeneration: {
+        status: 'queued',
+        targetTotal: TARGET_QUESTION_TOTAL,
+        generatedCount: Array.isArray(questionOutput.questionPlan) ? questionOutput.questionPlan.length : 0,
+        initialBatchSize: FIRST_QUESTION_BATCH_SIZE,
+        updatedAt: new Date(),
+      },
       evaluatedAt: new Date(),
     };
     session.status = 'in_progress';
@@ -924,8 +1003,18 @@ const startAdaptiveAssessment = async (req, res, next) => {
       event: {
         stage: 'questionnaire',
         status: 'completed',
-        message: `Adaptive question flow ready (${session.questionPlan.length} questions).`,
+        message: `First questions ready (${session.questionPlan.length}). Remaining questions will keep preparing in background.`,
+        meta: {
+          generated: session.questionPlan.length,
+          targetTotal: TARGET_QUESTION_TOTAL,
+        },
       },
+    });
+
+    enqueueRemainingQuestions({
+      sessionId: session._id,
+      userId: req.user.id,
+      targetTotal: TARGET_QUESTION_TOTAL,
     });
 
     return sendSuccess(res, {
@@ -933,6 +1022,12 @@ const startAdaptiveAssessment = async (req, res, next) => {
         session: toPublicSession(session),
         question: toPublicQuestion(session),
         prefetchedQuestion,
+        queue: {
+          mode: 'background',
+          generated: session.questionPlan.length,
+          targetTotal: TARGET_QUESTION_TOTAL,
+          status: 'running',
+        },
       },
       message: 'Adaptive assessment started successfully',
     });
@@ -949,6 +1044,27 @@ const getCurrentQuestion = async (req, res, next) => {
     });
 
     if (session.stage === 'questionnaire') {
+      const currentQuestion = toPublicQuestion(session);
+
+      if (!currentQuestion && isQuestionGenerationPending(session)) {
+        enqueueRemainingQuestions({
+          sessionId: session._id,
+          userId: req.user.id,
+          targetTotal: Number(session.adaptiveMetrics?.targetQuestionCount || TARGET_QUESTION_TOTAL),
+        });
+
+        return sendSuccess(res, {
+          data: {
+            session: toPublicSession(session),
+            question: null,
+            prefetchedQuestion: null,
+            waitingForNextQuestion: true,
+            next: 'questionnaire',
+          },
+          message: 'Preparing next question…',
+        });
+      }
+
       const prefetchedQuestion = prefetchNextQuestion({ session });
       session.lastActiveAt = new Date();
       await session.save();
@@ -956,7 +1072,7 @@ const getCurrentQuestion = async (req, res, next) => {
       return sendSuccess(res, {
         data: {
           session: toPublicSession(session),
-          question: toPublicQuestion(session),
+          question: currentQuestion,
           prefetchedQuestion,
           next: 'questionnaire',
         },
@@ -1159,7 +1275,46 @@ const answerAdaptiveQuestion = async (req, res, next) => {
       session.lastActiveAt = new Date();
 
       const reachedEnd = session.currentQuestionIndex >= (session.questionPlan || []).length;
-      const extensionSignal = reachedEnd
+      const targetQuestionCount = Math.max(
+        Number(session.adaptiveMetrics?.targetQuestionCount || TARGET_QUESTION_TOTAL),
+        TARGET_QUESTION_TOTAL
+      );
+      const stillExpectingQuestions = Array.isArray(session.questionPlan)
+        ? session.questionPlan.length < targetQuestionCount
+        : true;
+      const generationPending = isQuestionGenerationPending(session);
+
+      if (reachedEnd && stillExpectingQuestions) {
+        if (!generationPending) {
+          setQuestionGenerationStatus({
+            session,
+            status: 'queued',
+            targetTotal: targetQuestionCount,
+          });
+        }
+
+        enqueueRemainingQuestions({
+          sessionId: session._id,
+          userId: req.user.id,
+          targetTotal: targetQuestionCount,
+        });
+
+        await session.save();
+
+        return sendSuccess(res, {
+          data: {
+            session: toPublicSession(session),
+            question: toPublicQuestion(session),
+            prefetchedQuestion: null,
+            waitingForNextQuestion: true,
+            completedQuestionnaire: false,
+            adaptiveConfidence: Number(session.adaptiveMetrics?.questionnaireConfidence || 0),
+          },
+          message: 'Preparing next question…',
+        });
+      }
+
+      const extensionSignal = reachedEnd && !stillExpectingQuestions
         ? evaluateAdaptiveExtensionNeed({ session })
         : { extraQuestions: 0, reasons: [], confidence: 0, inconsistency: { inconsistencyScore: 0 } };
 
@@ -1286,7 +1441,10 @@ const answerAdaptiveQuestion = async (req, res, next) => {
         }
       }
 
-      const stopSignal = shouldStopAssessmentEarly({ session });
+      const stopSignalRaw = shouldStopAssessmentEarly({ session });
+      const stopSignal = stillExpectingQuestions
+        ? { ...stopSignalRaw, shouldStop: false }
+        : stopSignalRaw;
       session.adaptiveMetrics = {
         ...(session.adaptiveMetrics || {}),
         fatigue: fatigueSnapshot || session.adaptiveMetrics?.fatigue || null,
@@ -1297,10 +1455,14 @@ const answerAdaptiveQuestion = async (req, res, next) => {
         questionnaireConfidence: Number(stopSignal.confidence || 0),
         shouldStopEarly: Boolean(stopSignal.shouldStop),
         consistencyScore: Number(extensionSignal.inconsistency?.inconsistencyScore || session.adaptiveMetrics?.consistencyScore || 0),
-        targetQuestionCount: Number(session.questionPlan?.length || session.adaptiveMetrics?.targetQuestionCount || 0),
+        targetQuestionCount: Math.max(
+          Number(session.questionPlan?.length || 0),
+          Number(session.adaptiveMetrics?.targetQuestionCount || 0),
+          TARGET_QUESTION_TOTAL
+        ),
         evaluatedAt: new Date(),
       };
-      const shouldFinalize = reachedEnd || stopSignal.shouldStop;
+      const shouldFinalize = (reachedEnd && !stillExpectingQuestions) || stopSignal.shouldStop;
 
       if (shouldFinalize) {
         const resultOutput = await finalizeAssessment({ session });

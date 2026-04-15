@@ -39,10 +39,10 @@ const StepRole = ({
       <header className="assessment-step__header">
         <p className="assessment-step__eyebrow">Step 1</p>
         <h2 id="wizard-role-title" className="assessment-step__title">
-          Tell us about yourself
+          Choose your profile type
         </h2>
         <p className="assessment-step__subtitle">
-          Pick your role so the assessment can adapt question style and recommendations.
+          This helps calibrate tone and difficulty for your assessment experience.
         </p>
       </header>
 
@@ -104,7 +104,13 @@ const StepRole = ({
 
       <footer className="assessment-step__actions">
         <div />
-        <Button onClick={onNext} disabled={isNextDisabled}>
+        <Button
+          onClick={onNext}
+          disabled={isNextDisabled}
+          data-avatar-action="wizard-next-role"
+          data-avatar-target="start-assessment-cta"
+          data-avatar-hint="Continue to CV analysis."
+        >
           Next
         </Button>
       </footer>

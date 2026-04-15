@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useReducedMotion } from 'framer-motion';
-import { FiArrowLeft, FiArrowRight, FiBarChart2, FiCircle } from 'react-icons/fi';
+import { FiArrowLeft, FiArrowRight, FiBarChart2, FiCircle, FiSave } from 'react-icons/fi';
 import { gsap } from 'gsap';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -18,9 +18,13 @@ import {
   useSubmitAdaptiveAnswerMutation,
 } from '../../hooks/useAssessmentFlow';
 import {
+  clearQuestionDraft,
   readAssessmentFlowState,
+  readQuestionDraft,
   saveAssessmentFlowState,
+  saveQuestionDraft,
 } from '../../utils/assessmentFlowStorage';
+import { AVATAR_EVENTS, useAvatarEvents } from '../../components/avatar/AvatarEvents';
 
 const STAGE_LABELS = {
   personality: 'PERSONALITY ANALYSIS',
@@ -139,8 +143,10 @@ const AdaptiveAssessmentTestPage = () => {
   const sessionId = sessionFromQuery || sessionFromStorage;
 
   const questionQuery = useAdaptiveQuestionQuery(sessionId, Boolean(sessionId));
+  const refetchQuestion = questionQuery.refetch;
   const answerMutation = useSubmitAdaptiveAnswerMutation();
   const previousMutation = usePreviousAdaptiveQuestionMutation();
+  const { emit } = useAvatarEvents();
 
   const [likertValue, setLikertValue] = useState(0);
   const [scaleValue, setScaleValue] = useState(0);
@@ -150,6 +156,7 @@ const AdaptiveAssessmentTestPage = () => {
   const [feedback, setFeedback] = useState('');
   const [statusNote, setStatusNote] = useState('');
   const [questionStartAt, setQuestionStartAt] = useState(Date.now());
+  const [isSavingProgress, setIsSavingProgress] = useState(false);
 
   const progressBarRef = useRef(null);
   const questionCardRef = useRef(null);
@@ -164,9 +171,12 @@ const AdaptiveAssessmentTestPage = () => {
     N: 50,
   });
   const [animatedTraitPreview, setAnimatedTraitPreview] = useState(radarStateRef.current);
+  const answerSignalRef = useRef({ questionId: '', value: '' });
+  const draftTimerRef = useRef(0);
 
   const stage = questionQuery.data?.session?.stage || 'questionnaire';
   const question = questionQuery.data?.question || null;
+  const waitingForNextQuestion = Boolean(questionQuery.data?.waitingForNextQuestion) && !question;
 
   useEffect(() => {
     questionRef.current = question;
@@ -203,6 +213,20 @@ const AdaptiveAssessmentTestPage = () => {
   }, [auth.userId, localState.inputMode, localState.userProfile, localState.userRole, questionQuery.data, sessionId]);
 
   useEffect(() => {
+    if (!waitingForNextQuestion || !sessionId) {
+      return () => {};
+    }
+
+    const timer = window.setInterval(() => {
+      refetchQuestion();
+    }, 1800);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [refetchQuestion, sessionId, waitingForNextQuestion]);
+
+  useEffect(() => {
     setLikertValue(0);
     setScaleValue(0);
     setOptionId('');
@@ -210,6 +234,23 @@ const AdaptiveAssessmentTestPage = () => {
     setExampleValue('');
     setFeedback('');
     setQuestionStartAt(Date.now());
+
+    const activeQuestionId = String(question?.questionId || question?.id || '').trim();
+    if (sessionId && activeQuestionId) {
+      const draft = readQuestionDraft({
+        userId: auth.userId,
+        sessionId,
+        questionId: activeQuestionId,
+      });
+
+      if (draft) {
+        setLikertValue(Number(draft.likertValue || 0));
+        setScaleValue(Number(draft.scaleValue || 0));
+        setOptionId(String(draft.optionId || ''));
+        setTextValue(String(draft.textValue || ''));
+        setExampleValue(String(draft.exampleValue || ''));
+      }
+    }
 
     if (!questionCardRef.current || prefersReducedMotion) {
       return;
@@ -231,7 +272,76 @@ const AdaptiveAssessmentTestPage = () => {
     }
 
     return () => timeline.kill();
-  }, [question?.questionId, question?.id, question?.sequence, question?.scaleMin, prefersReducedMotion]);
+  }, [auth.userId, question?.questionId, question?.id, question?.sequence, question?.scaleMin, prefersReducedMotion, sessionId]);
+
+  const persistProgressSnapshot = useCallback(
+    ({ showMessage = false } = {}) => {
+      const activeQuestion = questionRef.current;
+      const activeQuestionId = String(activeQuestion?.questionId || activeQuestion?.id || '').trim();
+      if (!sessionId || !activeQuestionId) {
+        return false;
+      }
+
+      const hasDraftContent = Boolean(
+        (activeQuestion?.type === 'likert' && Number(likertValue || 0) > 0) ||
+          (activeQuestion?.type === 'scale' && Number(scaleValue || 0) > 0) ||
+          (['mcq', 'scenario'].includes(activeQuestion?.type) && String(optionId || '').trim()) ||
+          (['text', 'scenario'].includes(activeQuestion?.type) && String(textValue || '').trim()) ||
+          (activeQuestion?.expectsExample && String(exampleValue || '').trim())
+      );
+
+      saveAssessmentFlowState(auth.userId, {
+        sessionId,
+        stage: 'questionnaire',
+      });
+
+      if (hasDraftContent) {
+        saveQuestionDraft({
+          userId: auth.userId,
+          sessionId,
+          questionId: activeQuestionId,
+          payload: {
+            type: String(activeQuestion?.type || ''),
+            likertValue: Number(likertValue || 0),
+            scaleValue: Number(scaleValue || 0),
+            optionId: String(optionId || ''),
+            textValue: String(textValue || ''),
+            exampleValue: String(exampleValue || ''),
+          },
+        });
+      } else {
+        clearQuestionDraft({
+          userId: auth.userId,
+          sessionId,
+          questionId: activeQuestionId,
+        });
+      }
+
+      if (showMessage) {
+        setStatusNote('Progress saved. You can continue anytime.');
+      }
+
+      return true;
+    },
+    [auth.userId, exampleValue, likertValue, optionId, scaleValue, sessionId, textValue]
+  );
+
+  const handleSaveProgress = useCallback(() => {
+    setIsSavingProgress(true);
+    const saved = persistProgressSnapshot({ showMessage: true });
+    if (!saved) {
+      setStatusNote('No active question to save yet.');
+    }
+
+    window.setTimeout(() => {
+      setIsSavingProgress(false);
+    }, 260);
+  }, [persistProgressSnapshot]);
+
+  const handleSaveAndExit = useCallback(() => {
+    persistProgressSnapshot({ showMessage: false });
+    navigate('/dashboard');
+  }, [navigate, persistProgressSnapshot]);
 
   const progress = useMemo(() => {
     if (!question) {
@@ -415,12 +525,22 @@ const AdaptiveAssessmentTestPage = () => {
           return;
         }
 
+        clearQuestionDraft({
+          userId: auth.userId,
+          sessionId,
+          questionId: submissionPayload.questionId,
+        });
+
         const payload = await answerMutation.mutateAsync({
           sessionId,
           payload: submissionPayload,
         });
 
         if (payload.completedAssessment) {
+          emit(AVATAR_EVENTS.ASSESSMENT_COMPLETE, {
+            progress: 100,
+            targetKey: 'question-card',
+          });
           saveAssessmentFlowState(auth.userId, {
             sessionId,
             stage: 'result',
@@ -430,6 +550,10 @@ const AdaptiveAssessmentTestPage = () => {
         }
 
         if (payload.completedQuestionnaire) {
+          emit(AVATAR_EVENTS.ASSESSMENT_COMPLETE, {
+            progress: 100,
+            targetKey: 'question-card',
+          });
           if (payload.session?.stage === 'behavior') {
             navigate(`/assessment/behavior?session=${sessionId}`);
             return;
@@ -443,11 +567,17 @@ const AdaptiveAssessmentTestPage = () => {
           setStatusNote(payload.refiningMessage);
           return;
         }
+
+        if (payload.waitingForNextQuestion) {
+          setStatusNote('Preparing next question…');
+          refetchQuestion();
+          return;
+        }
       } catch (error) {
         setFeedback(error.message || 'Unable to save answer. Please retry.');
       }
     },
-    [auth.userId, answerMutation, buildPayload, canSubmit, navigate, sessionId]
+    [auth.userId, answerMutation, buildPayload, canSubmit, emit, navigate, refetchQuestion, sessionId]
   );
 
   const goToPrevious = useCallback(async () => {
@@ -546,15 +676,89 @@ const AdaptiveAssessmentTestPage = () => {
     Boolean(question) &&
     Number(question.sequence || question.index + 1 || 1) >= Number(question.total || 1);
 
+  useEffect(() => {
+    if (questionQuery.isPending || isResultGenerationPending) {
+      emit(AVATAR_EVENTS.AI_LOADING, {
+        long: true,
+        targetKey: 'question-card',
+      });
+    }
+  }, [emit, isResultGenerationPending, questionQuery.isPending]);
+
+  useEffect(() => {
+    const questionId = String(question?.questionId || question?.id || '').trim();
+    if (!questionId) {
+      return;
+    }
+
+    const signalValue = [
+      question?.type === 'likert' ? String(likertValue || '') : '',
+      question?.type === 'scale' ? String(scaleValue || '') : '',
+      ['mcq', 'scenario'].includes(question?.type) ? String(optionId || '') : '',
+      ['text', 'scenario'].includes(question?.type) ? String(textValue || '').trim() : '',
+      question?.expectsExample ? String(exampleValue || '').trim() : '',
+    ]
+      .filter(Boolean)
+      .join('|');
+
+    if (!signalValue) {
+      return;
+    }
+
+    const previousSignal = answerSignalRef.current;
+    const changed = previousSignal.questionId === questionId && previousSignal.value !== signalValue;
+
+    emit(changed ? AVATAR_EVENTS.ANSWER_CHANGED : AVATAR_EVENTS.ANSWER_SELECTED, {
+      progress,
+      questionId,
+      targetKey: 'question-card',
+    });
+
+    answerSignalRef.current = {
+      questionId,
+      value: signalValue,
+    };
+  }, [emit, exampleValue, likertValue, optionId, progress, question, scaleValue, textValue]);
+
+  useEffect(() => {
+    if (!sessionId || !question) {
+      return () => {};
+    }
+
+    window.clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = window.setTimeout(() => {
+      persistProgressSnapshot({ showMessage: false });
+    }, 650);
+
+    return () => {
+      window.clearTimeout(draftTimerRef.current);
+    };
+  }, [exampleValue, likertValue, optionId, persistProgressSnapshot, question, scaleValue, sessionId, textValue]);
+
   if (questionQuery.isPending) {
     return (
       <main className="app-page assessment-page phase4-question-page">
         <div className="page-shell assessment-shell">
-          <Card title="Loading adaptive interview" subtitle="AI is preparing your next question frame.">
-            <Loader label="AI is mapping your next adaptive question..." variant="question" />
+          <Card title="Preparing your assessment" subtitle="Preparing your personalized questions…">
+            <Loader label="Preparing your personalized questions…" variant="question" />
             <Skeleton height="24px" />
             <Skeleton height="78px" />
             <Skeleton height="42px" count={2} />
+          </Card>
+        </div>
+      </main>
+    );
+  }
+
+  if (waitingForNextQuestion) {
+    return (
+      <main className="app-page assessment-page phase4-question-page">
+        <div className="page-shell assessment-shell">
+          <Card title="Preparing next question" subtitle="Preparing next question…">
+            <Loader label="Preparing next question…" variant="question" />
+            <p className="ui-message ui-message--neutral">
+              We are adding the next personalized question in the background.
+            </p>
           </Card>
         </div>
       </main>
@@ -579,7 +783,7 @@ const AdaptiveAssessmentTestPage = () => {
   const normalizedStage = normalizeStage(question.stage || 'personality');
 
   return (
-    <main className="app-page assessment-page phase4-question-page">
+    <main className="app-page assessment-page phase4-question-page" data-avatar-section="phase4-question-main">
       <LoaderOverlay
         visible={isResultGenerationPending}
         message="Building your personality profile..."
@@ -594,8 +798,19 @@ const AdaptiveAssessmentTestPage = () => {
             </p>
           </div>
           <div className="assessment-header-actions">
-            <Button variant="ghost" onClick={() => navigate('/assessment/start')}>
-              Exit
+            <Button
+              variant="ghost"
+              onClick={handleSaveProgress}
+              loading={isSavingProgress}
+              disabled={questionQuery.isPending}
+              data-avatar-action="save-progress"
+              data-avatar-target="question-card"
+              data-avatar-hint="Save progress without submitting."
+            >
+              <FiSave /> Save Progress
+            </Button>
+            <Button variant="ghost" onClick={handleSaveAndExit}>
+              Save & Exit
             </Button>
           </div>
         </header>
@@ -611,7 +826,13 @@ const AdaptiveAssessmentTestPage = () => {
         </div>
 
         <div className="phase4-question-layout">
-          <div className="question-card-motion" ref={questionCardRef} data-scroll-reveal>
+          <div
+            className="question-card-motion"
+            ref={questionCardRef}
+            data-scroll-reveal
+            data-avatar-section="phase4-question-main"
+            data-avatar-target="question-card"
+          >
             <Card
               animated={false}
               className="question-card phase3-question-card phase4-question-card"
@@ -659,17 +880,32 @@ const AdaptiveAssessmentTestPage = () => {
                     answerMutation.isPending ||
                     Number(question.sequence || 1) <= 1
                   }
+                  data-avatar-action="question-prev"
+                  data-avatar-target="question-card"
                 >
                   <FiArrowLeft /> Previous
                 </Button>
-                <Button onClick={submitAnswer} loading={answerMutation.isPending} disabled={!canSubmit}>
+                <Button
+                  onClick={submitAnswer}
+                  loading={answerMutation.isPending}
+                  disabled={!canSubmit}
+                  data-avatar-action="question-next"
+                  data-avatar-target="question-card"
+                  data-avatar-hint="Submit this answer to move forward."
+                >
                   Next <FiArrowRight />
                 </Button>
               </div>
             </Card>
           </div>
 
-          <div className="phase4-question-side" data-scroll-reveal ref={sidePanelRef}>
+          <div
+            className="phase4-question-side"
+            data-scroll-reveal
+            ref={sidePanelRef}
+            data-avatar-section="phase4-live-panel"
+            data-avatar-target="question-side-panel"
+          >
             <QuestionVisualPanel question={question} />
             <Card
               animated={false}

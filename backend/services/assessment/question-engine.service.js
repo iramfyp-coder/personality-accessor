@@ -224,8 +224,9 @@ const generateQuestionPlan = async ({
   askedQuestions = [],
   targetCount = BASE_QUESTION_COUNT,
   aiProfile,
+  includeSupplemental = true,
 } = {}) => {
-  const resolvedTarget = clamp(Number(targetCount || BASE_QUESTION_COUNT), BASE_QUESTION_COUNT, BASE_QUESTION_COUNT);
+  const resolvedTarget = clamp(Number(targetCount || BASE_QUESTION_COUNT), 1, BASE_QUESTION_COUNT);
 
   const resolvedAiProfile = await extractAiCvIntelligence({
     cvData,
@@ -243,13 +244,15 @@ const generateQuestionPlan = async ({
     baseIndex: 0,
   });
 
-  const prefetchedSupplementalQuestionPlan = await buildAdaptiveQuestionSet({
-    aiProfile: resolvedAiProfile,
-    existingQuestions: questionPlan,
-    askedQuestions: [...askedQuestions, ...questionPlan],
-    targetCount: QUESTION_EXTENSION_STEP,
-    baseIndex: questionPlan.length,
-  });
+  const prefetchedSupplementalQuestionPlan = includeSupplemental
+    ? await buildAdaptiveQuestionSet({
+        aiProfile: resolvedAiProfile,
+        existingQuestions: questionPlan,
+        askedQuestions: [...askedQuestions, ...questionPlan],
+        targetCount: QUESTION_EXTENSION_STEP,
+        baseIndex: questionPlan.length,
+      })
+    : [];
 
   const usedIntents = questionPlan.map((question) => toText(question.intentTag || question.intent)).filter(Boolean);
 

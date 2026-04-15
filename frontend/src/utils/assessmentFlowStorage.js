@@ -1,6 +1,9 @@
 const STORAGE_KEY_PREFIX = 'assessment_flow_v1';
+const QUESTION_DRAFT_KEY_PREFIX = 'assessment_flow_question_draft_v1';
 
 const getStorageKey = (userId) => `${STORAGE_KEY_PREFIX}:${userId || 'anonymous'}`;
+const getQuestionDraftKey = ({ userId, sessionId, questionId }) =>
+  `${QUESTION_DRAFT_KEY_PREFIX}:${userId || 'anonymous'}:${sessionId || 'session'}:${questionId || 'question'}`;
 
 export const readAssessmentFlowState = (userId) => {
   try {
@@ -51,4 +54,48 @@ export const saveAssessmentFlowState = (userId, payload = {}) => {
 
 export const clearAssessmentFlowState = (userId) => {
   localStorage.removeItem(getStorageKey(userId));
+};
+
+export const readQuestionDraft = ({ userId, sessionId, questionId }) => {
+  if (!sessionId || !questionId) {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(getQuestionDraftKey({ userId, sessionId, questionId }));
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    return parsed;
+  } catch (error) {
+    return null;
+  }
+};
+
+export const saveQuestionDraft = ({ userId, sessionId, questionId, payload = {} }) => {
+  if (!sessionId || !questionId) {
+    return;
+  }
+
+  const draft = {
+    questionId: String(questionId),
+    updatedAt: new Date().toISOString(),
+    ...payload,
+  };
+
+  localStorage.setItem(getQuestionDraftKey({ userId, sessionId, questionId }), JSON.stringify(draft));
+};
+
+export const clearQuestionDraft = ({ userId, sessionId, questionId }) => {
+  if (!sessionId || !questionId) {
+    return;
+  }
+
+  localStorage.removeItem(getQuestionDraftKey({ userId, sessionId, questionId }));
 };

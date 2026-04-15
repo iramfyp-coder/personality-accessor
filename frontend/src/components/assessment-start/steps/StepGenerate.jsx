@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { FiCheckCircle, FiCircle, FiLoader } from 'react-icons/fi';
 import Button from '../../ui/Button';
+import { AVATAR_EVENTS, useAvatarEvents } from '../../avatar/AvatarEvents';
 
 const StepGenerate = ({
   generationStatus,
@@ -13,6 +14,23 @@ const StepGenerate = ({
   const isRunning = generationStatus === 'running';
   const isSuccess = generationStatus === 'success';
   const isError = generationStatus === 'error';
+  const { emit } = useAvatarEvents();
+
+  useEffect(() => {
+    if (isRunning) {
+      emit(AVATAR_EVENTS.AI_LOADING, {
+        long: true,
+        targetKey: 'start-assessment-cta',
+      });
+      return;
+    }
+
+    if (isSuccess) {
+      emit(AVATAR_EVENTS.ASSESSMENT_COMPLETE, {
+        targetKey: 'start-assessment-cta',
+      });
+    }
+  }, [emit, isRunning, isSuccess]);
 
   return (
     <section className="assessment-step" aria-labelledby="wizard-generate-title">
@@ -60,10 +78,22 @@ const StepGenerate = ({
         <div className="wizard-generate-error">
           <p className="ui-message ui-message--error">{generationError}</p>
           <footer className="assessment-step__actions">
-            <Button variant="ghost" onClick={onBack}>
+            <Button
+              variant="ghost"
+              onClick={onBack}
+              data-avatar-action="wizard-back-generate"
+              data-avatar-target="start-assessment-cta"
+            >
               Back
             </Button>
-            <Button onClick={onRetry}>Try Again</Button>
+            <Button
+              onClick={onRetry}
+              data-avatar-action="wizard-retry-generate"
+              data-avatar-target="start-assessment-cta"
+              data-avatar-hint="Retry generation when your connection is stable."
+            >
+              Try Again
+            </Button>
           </footer>
         </div>
       ) : null}

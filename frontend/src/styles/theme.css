@@ -1395,6 +1395,116 @@ kbd {
   font-size: 0.9rem;
 }
 
+.avatar-overlay-layer {
+  position: fixed;
+  left: 16px;
+  bottom: 24px;
+  width: var(--avatar-width, 128px);
+  height: var(--avatar-height, 192px);
+  pointer-events: none;
+  z-index: var(--avatar-layer, 1300);
+  isolation: isolate;
+  visibility: visible;
+}
+
+.avatar-overlay-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: transparent;
+  z-index: var(--avatar-layer, 1300);
+  visibility: visible;
+}
+
+.avatar-overlay-layer *,
+.avatar-overlay-canvas *,
+.avatar-overlay-canvas canvas,
+.avatar-3d-fallback-image,
+.avatar-speech-bubble {
+  pointer-events: none !important;
+}
+
+.avatar-overlay-canvas canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  background: transparent !important;
+  visibility: visible !important;
+}
+
+.avatar-3d-fallback-image {
+  position: fixed;
+  z-index: calc(var(--avatar-layer, 1300) + 1);
+  object-fit: contain;
+  pointer-events: none;
+  opacity: 1;
+  visibility: visible;
+  filter: drop-shadow(0 18px 24px rgba(2, 8, 22, 0.35));
+}
+
+.avatar-3d-loading {
+  border: 1px solid rgba(148, 163, 200, 0.34);
+  border-radius: 999px;
+  background: rgba(8, 15, 28, 0.88);
+  color: #d8e4ff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 0.38rem 0.68rem;
+}
+
+.avatar-speech-bubble {
+  position: fixed;
+  z-index: calc(var(--avatar-layer, 1300) + 2);
+  max-width: min(320px, 38vw);
+  border-radius: 14px;
+  border: 1px solid rgba(148, 176, 226, 0.4);
+  background: rgba(8, 14, 27, 0.93);
+  color: #eff5ff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.38;
+  padding: 0.48rem 0.7rem;
+  box-shadow: 0 12px 28px rgba(2, 7, 19, 0.36);
+  pointer-events: none;
+}
+
+.avatar-speech-bubble::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  width: 9px;
+  height: 9px;
+  background: inherit;
+  border-top: 1px solid rgba(148, 176, 226, 0.4);
+  border-right: 1px solid rgba(148, 176, 226, 0.4);
+}
+
+.avatar-speech-bubble--left::after {
+  left: -6px;
+  transform: rotate(-135deg);
+}
+
+.avatar-speech-bubble--right::after {
+  right: -6px;
+  transform: rotate(45deg);
+}
+
+@media (max-width: 760px) {
+  .avatar-overlay-layer {
+    width: var(--avatar-width, 94px);
+    height: var(--avatar-height, 140px);
+  }
+
+  .avatar-speech-bubble {
+    max-width: min(245px, 72vw);
+    font-size: 0.74rem;
+    padding: 0.42rem 0.62rem;
+  }
+}
+
 .result-shell {
   gap: var(--space-6);
 }
@@ -3648,6 +3758,13 @@ kbd {
   flex-wrap: wrap;
 }
 
+.phase3-download-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
 .phase3-result-hero__stats {
   display: grid;
   gap: 0.62rem;
@@ -3832,7 +3949,7 @@ kbd {
 
 .assessment-wizard-progress__steps {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
@@ -4116,6 +4233,53 @@ kbd {
 .wizard-manual-grid__full,
 .wizard-confirm-grid__full {
   grid-column: 1 / -1;
+}
+
+.wizard-profile-ready {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.wizard-profile-ready__block {
+  border: 1px solid rgba(148, 163, 200, 0.34);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.84), rgba(11, 16, 30, 0.9));
+  padding: 0.95rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.wizard-profile-ready__block h3 {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.wizard-profile-ready__block p {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.wizard-profile-ready__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.46rem;
+}
+
+.wizard-profile-ready__chip {
+  border: 1px solid rgba(148, 163, 200, 0.42);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.28rem 0.62rem;
+}
+
+.wizard-profile-ready__empty {
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 .wizard-generate-shell {

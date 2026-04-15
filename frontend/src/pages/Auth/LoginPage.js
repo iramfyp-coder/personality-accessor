@@ -86,9 +86,9 @@ const LoginPage = () => {
   };
 
   return (
-    <main className="auth-page">
+    <main className="auth-page" data-avatar-section="login-main" data-avatar-label="Login">
       <div className="auth-page__content">
-        <ScaleIn as="section" className="hero-panel" from={0.97}>
+        <ScaleIn as="section" className="hero-panel" from={0.97} data-avatar-section="login-hero">
           <p className="hero-panel__eyebrow">Personality Assessor</p>
           <h1 className="hero-panel__title">Sign in to continue your growth journey</h1>
           <p className="hero-panel__subtitle">
@@ -96,64 +96,75 @@ const LoginPage = () => {
           </p>
         </ScaleIn>
 
-        <Card className="auth-card" title="Welcome Back" subtitle="Use your account credentials">
-          <form onSubmit={handleSubmit} className="auth-form" noValidate>
-            <label className="auth-form__field">
-              <span>Email</span>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                placeholder="you@example.com"
-                autoComplete="email"
-                required
-              />
-            </label>
-
-            <label className="auth-form__field">
-              <span>Password</span>
-              <div className="auth-form__password-wrap">
+        <div data-avatar-target="login-form" data-avatar-section="login-form">
+          <Card className="auth-card" title="Welcome Back" subtitle="Use your account credentials">
+            <form onSubmit={handleSubmit} className="auth-form" noValidate>
+              <label className="auth-form__field">
+                <span>Email</span>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  value={form.password}
+                  type="email"
+                  name="email"
+                  value={form.email}
                   onChange={handleChange}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
+                  placeholder="you@example.com"
+                  autoComplete="email"
                   required
                 />
-                <button
-                  type="button"
-                  className="auth-form__password-toggle"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                >
-                  {showPassword ? 'Hide' : 'Show'}
-                </button>
+              </label>
+
+              <label className="auth-form__field">
+                <span>Password</span>
+                <div className="auth-form__password-wrap">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="auth-form__password-toggle"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    data-avatar-action="toggle-password"
+                    data-avatar-hint="You can toggle password visibility."
+                  >
+                    {showPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </label>
+
+              {errorMessage && <p className="ui-message ui-message--error">{errorMessage}</p>}
+
+              <Button
+                type="submit"
+                loading={loginMutation.isPending || googleMutation.isPending}
+                block
+                data-avatar-action="login-submit"
+                data-avatar-target="login-form"
+                data-avatar-hint="Sign in to open your dashboard."
+              >
+                Sign In
+              </Button>
+            </form>
+
+            {GOOGLE_CLIENT_ID && (
+              <div className="auth-google">
+                <p className="auth-google__divider">or continue with</p>
+                <GoogleLoginButton
+                  onCredential={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                />
               </div>
-            </label>
+            )}
 
-            {errorMessage && <p className="ui-message ui-message--error">{errorMessage}</p>}
-
-            <Button type="submit" loading={loginMutation.isPending || googleMutation.isPending} block>
-              Sign In
-            </Button>
-          </form>
-
-          {GOOGLE_CLIENT_ID && (
-            <div className="auth-google">
-              <p className="auth-google__divider">or continue with</p>
-              <GoogleLoginButton
-                onCredential={handleGoogleSuccess}
-                onError={handleGoogleError}
-              />
-            </div>
-          )}
-
-          <p className="auth-footer-text">
-            New here? <Link to="/signup">Create an account</Link>
-          </p>
-        </Card>
+            <p className="auth-footer-text">
+              New here? <Link to="/signup">Create an account</Link>
+            </p>
+          </Card>
+        </div>
       </div>
     </main>
   );

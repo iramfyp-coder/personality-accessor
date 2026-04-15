@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   envPrefix: ['VITE_', 'REACT_APP_'],
   server: {
+    historyApiFallback: true,
     proxy: {
       '/api': {
         target: 'http://localhost:5002',

@@ -102,9 +102,9 @@ const SignupPage = () => {
   };
 
   return (
-    <main className="auth-page">
+    <main className="auth-page" data-avatar-section="signup-main">
       <div className="auth-page__content">
-        <ScaleIn as="section" className="hero-panel" from={0.97}>
+        <ScaleIn as="section" className="hero-panel" from={0.97} data-avatar-section="signup-hero">
           <p className="hero-panel__eyebrow">Personality Assessor</p>
           <h1 className="hero-panel__title">Build your profile and unlock personalized insights</h1>
           <p className="hero-panel__subtitle">
@@ -112,8 +112,9 @@ const SignupPage = () => {
           </p>
         </ScaleIn>
 
-        <Card className="auth-card" title="Create Account" subtitle="Get started in under a minute">
-          <form onSubmit={handleSubmit} className="auth-form" noValidate>
+        <div data-avatar-target="signup-form" data-avatar-section="signup-form">
+          <Card className="auth-card" title="Create Account" subtitle="Get started in under a minute">
+            <form onSubmit={handleSubmit} className="auth-form" noValidate>
             <label className="auth-form__field">
               <span>Full Name</span>
               <input
@@ -166,10 +167,17 @@ const SignupPage = () => {
             {errorMessage && <p className="ui-message ui-message--error">{errorMessage}</p>}
             {successMessage && <p className="ui-message ui-message--success">{successMessage}</p>}
 
-            <Button type="submit" loading={signupMutation.isPending || googleMutation.isPending} block>
+            <Button
+              type="submit"
+              loading={signupMutation.isPending || googleMutation.isPending}
+              block
+              data-avatar-action="signup-submit"
+              data-avatar-target="signup-form"
+              data-avatar-hint="Create your account to unlock the assessment flow."
+            >
               Create Account
             </Button>
-          </form>
+            </form>
 
           {GOOGLE_CLIENT_ID && (
             <div className="auth-google">
@@ -181,10 +189,11 @@ const SignupPage = () => {
             </div>
           )}
 
-          <p className="auth-footer-text">
-            Already have an account? <Link to="/login">Sign in</Link>
-          </p>
-        </Card>
+            <p className="auth-footer-text">
+              Already have an account? <Link to="/login">Sign in</Link>
+            </p>
+          </Card>
+        </div>
       </div>
     </main>
   );

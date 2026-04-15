@@ -549,8 +549,37 @@ const Dashboard = () => {
   }, [navigate]);
 
   const handleResume = useCallback(() => {
+    const activeSession = activeFlowSessionQuery.data?.session;
+    const activeSessionId = String(activeSession?.sessionId || '').trim();
+    const activeStage = String(activeSession?.stage || '').toLowerCase();
+
+    if (activeSessionId) {
+      if (activeStage === 'behavior') {
+        navigate(`/assessment/behavior?session=${activeSessionId}`);
+        return;
+      }
+
+      if (activeStage === 'result') {
+        navigate(`/assessment/result?session=${activeSessionId}`);
+        return;
+      }
+
+      if (activeStage === 'questionnaire') {
+        navigate(`/assessment/test?session=${activeSessionId}`);
+        return;
+      }
+
+      navigate('/assessment/start');
+      return;
+    }
+
+    if (localDraft?.sessionId) {
+      navigate(`/assessment?mode=resume&session=${localDraft.sessionId}`);
+      return;
+    }
+
     navigate('/assessment/start');
-  }, [navigate]);
+  }, [activeFlowSessionQuery.data?.session, localDraft?.sessionId, navigate]);
 
   const handleSearchSubmit = useCallback(
     (event) => {
@@ -704,7 +733,7 @@ const Dashboard = () => {
   );
 
   return (
-    <main className="app-page intelligence-page">
+    <main className="app-page intelligence-page" data-avatar-section="dashboard-main">
       <div className={`intelligence-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
         <aside className="intel-sidebar" aria-label="Dashboard navigation">
           <div className="intel-sidebar__top">
@@ -750,6 +779,9 @@ const Dashboard = () => {
               type="button"
               className="intel-sidebar__footer-button"
               onClick={handleStart}
+              data-avatar-action="start-assessment"
+              data-avatar-target="dashboard-primary-action"
+              data-avatar-hint="Start a new adaptive assessment."
             >
               <FiZap />
               <span>Start Assessment</span>
@@ -771,7 +803,14 @@ const Dashboard = () => {
             </form>
 
             <div className="intel-header__actions">
-              <Button className="intel-header__cta" variant="secondary" onClick={handleStart}>
+              <Button
+                className="intel-header__cta"
+                variant="secondary"
+                onClick={handleStart}
+                data-avatar-action="start-assessment"
+                data-avatar-target="dashboard-primary-action"
+                data-avatar-hint="Start Assessment opens a new adaptive session."
+              >
                 Start Assessment
               </Button>
 
@@ -837,6 +876,9 @@ const Dashboard = () => {
                         setIsUserMenuOpen(false);
                         handleStart();
                       }}
+                      data-avatar-action="start-assessment"
+                      data-avatar-target="dashboard-primary-action"
+                      data-avatar-hint="Start Assessment begins your guided flow."
                     >
                       <FiZap />
                       Start assessment
@@ -861,6 +903,8 @@ const Dashboard = () => {
               id="dashboard-overview"
               className="intel-grid__profile"
               variants={cardVariants}
+              data-avatar-section="dashboard-overview"
+              data-avatar-target="dashboard-profile"
             >
               <Card
                 title="Profile Identity"
@@ -913,7 +957,12 @@ const Dashboard = () => {
               </Card>
             </motion.div>
 
-            <motion.div id="ai-reports" className="intel-grid__ai" variants={cardVariants}>
+            <motion.div
+              id="ai-reports"
+              className="intel-grid__ai"
+              variants={cardVariants}
+              data-avatar-section="dashboard-reports"
+            >
               <Card
                 title="AI Insight Card"
                 subtitle="Summary, dominant trait signal, and recommendation"
@@ -958,6 +1007,8 @@ const Dashboard = () => {
               id="trait-analytics"
               className="intel-grid__analytics"
               variants={cardVariants}
+              data-avatar-section="trait-analytics"
+              data-avatar-target="dashboard-analytics"
             >
               <Card
                 title="Trait Analytics"
@@ -1036,6 +1087,8 @@ const Dashboard = () => {
               id="assessment-history"
               className="intel-grid__history"
               variants={cardVariants}
+              data-avatar-section="assessment-history"
+              data-avatar-target="dashboard-history"
             >
               <Card
                 title="Assessment Timeline"
@@ -1096,14 +1149,27 @@ const Dashboard = () => {
                           Local draft found. Last saved: {formatDate(localDraft?.lastUpdatedAt)}
                         </p>
                       )}
-                      <Button size="sm" onClick={handleResume}>
+                      <Button
+                        size="sm"
+                        onClick={handleResume}
+                        data-avatar-action="resume-assessment"
+                        data-avatar-target="dashboard-history"
+                        data-avatar-hint="Resume continues your latest saved assessment."
+                      >
                         Resume Assessment
                       </Button>
                     </>
                   ) : (
                     <>
                       <p className="empty-state">No unfinished session detected.</p>
-                      <Button size="sm" variant="ghost" onClick={handleStart}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleStart}
+                        data-avatar-action="start-assessment"
+                        data-avatar-target="dashboard-primary-action"
+                        data-avatar-hint="Start your first session from here."
+                      >
                         Start New Session
                       </Button>
                     </>

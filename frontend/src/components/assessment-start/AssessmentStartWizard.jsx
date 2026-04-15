@@ -4,7 +4,6 @@ import { FiCheckCircle } from 'react-icons/fi';
 import StepRole from './steps/StepRole';
 import StepCV from './steps/StepCV';
 import StepProfile from './steps/StepProfile';
-import StepGenerate from './steps/StepGenerate';
 import {
   ROLE_OPTIONS,
   useAssessmentWizard,
@@ -12,10 +11,9 @@ import {
 } from '../../hooks/useAssessmentWizard';
 
 const PROGRESS_STEPS = [
-  { id: WIZARD_STEPS.role, label: 'Role' },
-  { id: WIZARD_STEPS.profileInput, label: 'Profile' },
-  { id: WIZARD_STEPS.confirm, label: 'Confirm' },
-  { id: WIZARD_STEPS.generate, label: 'Generate' },
+  { id: WIZARD_STEPS.profileType, label: 'Profile Type' },
+  { id: WIZARD_STEPS.cvAnalysis, label: 'Analyze CV' },
+  { id: WIZARD_STEPS.startAssessment, label: 'Start' },
 ];
 
 const AssessmentStartWizard = () => {
@@ -25,26 +23,20 @@ const AssessmentStartWizard = () => {
     setUserRole,
     cvFile,
     setCvFile,
-    inputMode,
-    setInputMode,
-    manualProfile,
-    updateManualProfile,
     parsedProfile,
-    updateParsedProfile,
     stepError,
     setStepError,
-    generationStatus,
-    generationError,
-    generationMessages,
-    generationIndex,
+    analysisStatus,
+    analysisMessages,
+    analysisIndex,
     isBusy,
     isStarting,
+    isUploading,
     isStep1Valid,
     isStep2Valid,
     isStep3Valid,
     goToPreviousStep,
     goToNextStep,
-    retryGeneration,
   } = useAssessmentWizard();
 
   const stepShellRef = useRef(null);
@@ -75,7 +67,7 @@ const AssessmentStartWizard = () => {
   }, [currentStep]);
 
   const stepView = useMemo(() => {
-    if (currentStep === WIZARD_STEPS.role) {
+    if (currentStep === WIZARD_STEPS.profileType) {
       return (
         <StepRole
           roleOptions={ROLE_OPTIONS}
@@ -90,92 +82,70 @@ const AssessmentStartWizard = () => {
       );
     }
 
-    if (currentStep === WIZARD_STEPS.profileInput) {
+    if (currentStep === WIZARD_STEPS.cvAnalysis) {
       return (
         <StepCV
-          inputMode={inputMode}
           cvFile={cvFile}
-          onModeChange={(mode) => {
-            setStepError('');
-            setInputMode(mode);
-          }}
           onCvFileChange={(file) => {
             setStepError('');
             setCvFile(file);
           }}
-          manualProfile={manualProfile}
-          onManualChange={(key, value) => {
-            setStepError('');
-            updateManualProfile(key, value);
-          }}
           onBack={goToPreviousStep}
-          onNext={goToNextStep}
-          isNextDisabled={!isStep2Valid}
-          isBusy={isBusy}
-          errorMessage={stepError}
-        />
-      );
-    }
-
-    if (currentStep === WIZARD_STEPS.confirm) {
-      return (
-        <StepProfile
-          parsedProfile={parsedProfile}
-          onProfileChange={(key, value) => {
-            setStepError('');
-            updateParsedProfile(key, value);
-          }}
-          onBack={goToPreviousStep}
-          onGenerate={goToNextStep}
-          isGenerateDisabled={!isStep3Valid}
-          isGenerating={isStarting}
+          onAnalyze={goToNextStep}
+          isAnalyzeDisabled={!isStep2Valid}
+          isAnalyzing={isUploading}
+          analysisStatus={analysisStatus}
+          analysisMessages={analysisMessages}
+          analysisIndex={analysisIndex}
           errorMessage={stepError}
         />
       );
     }
 
     return (
-      <StepGenerate
-        generationStatus={generationStatus}
-        generationMessages={generationMessages}
-        generationIndex={generationIndex}
-        generationError={generationError}
+      <StepProfile
+        parsedProfile={parsedProfile}
         onBack={goToPreviousStep}
-        onRetry={retryGeneration}
+        onStartAssessment={goToNextStep}
+        isStartDisabled={!isStep3Valid}
+        isStarting={isStarting}
+        errorMessage={stepError}
       />
     );
   }, [
     currentStep,
     cvFile,
-    generationError,
-    generationIndex,
-    generationMessages,
-    generationStatus,
+    analysisIndex,
+    analysisMessages,
+    analysisStatus,
     goToNextStep,
     goToPreviousStep,
-    inputMode,
     isBusy,
     isStarting,
+    isUploading,
     isStep1Valid,
     isStep2Valid,
     isStep3Valid,
-    manualProfile,
     parsedProfile,
-    retryGeneration,
     setCvFile,
-    setInputMode,
     setStepError,
     setUserRole,
     stepError,
-    updateManualProfile,
-    updateParsedProfile,
     userRole,
   ]);
 
   return (
-    <main className="app-page phase4-start-page assessment-wizard-page">
+    <main
+      className="app-page phase4-start-page assessment-wizard-page"
+      data-avatar-section="start-main"
+      data-avatar-label="Assessment Setup"
+    >
       <div className="page-shell assessment-wizard-shell">
-        <section className="assessment-wizard-progress" aria-label="Assessment wizard progress">
+        <section
+          className="assessment-wizard-progress"
+          aria-label="Assessment wizard progress"
+          data-avatar-section="start-progress"
+        >
           <div className="assessment-wizard-progress__track" aria-hidden="true">
             <div
               className="assessment-wizard-progress__fill"
@@ -205,7 +175,13 @@ const AssessmentStartWizard = () => {
           </div>
         </section>
 
-        <section ref={stepShellRef} className="ui-card assessment-wizard-card" key={currentStep}>
+        <section
+          ref={stepShellRef}
+          className="ui-card assessment-wizard-card"
+          key={currentStep}
+          data-avatar-section="start-step"
+          data-avatar-target="start-assessment-cta"
+        >
           {stepView}
         </section>
       </div>

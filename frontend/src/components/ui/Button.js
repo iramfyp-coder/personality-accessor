@@ -10,6 +10,7 @@ const Button = ({
   disabled = false,
   onClick,
   className = '',
+  ...rest
 }) => {
   const [ripples, setRipples] = useState([]);
 
@@ -58,6 +59,7 @@ const Button = ({
       onTouchStart={createRipple}
       disabled={disabled || loading}
       aria-busy={loading}
+      {...rest}
     >
       <span className="ui-button__content">{loading ? 'Please wait...' : children}</span>
       <span className="ui-button__ripple-container" aria-hidden="true">

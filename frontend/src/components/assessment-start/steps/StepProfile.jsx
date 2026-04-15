@@ -1,104 +1,102 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import Button from '../../ui/Button';
+
+const toList = (value = '') =>
+  String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
 
 const StepProfile = ({
   parsedProfile,
-  onProfileChange,
   onBack,
-  onGenerate,
-  isGenerateDisabled,
-  isGenerating,
+  onStartAssessment,
+  isStartDisabled,
+  isStarting,
   errorMessage,
 }) => {
+  const summary = useMemo(
+    () => ({
+      field: String(parsedProfile?.field || '').trim() || 'General',
+      skills: toList(parsedProfile?.skills),
+      interests: toList(parsedProfile?.interests),
+    }),
+    [parsedProfile]
+  );
+
   return (
-    <section className="assessment-step" aria-labelledby="wizard-confirm-title">
+    <section className="assessment-step" aria-labelledby="wizard-ready-title">
       <header className="assessment-step__header">
         <p className="assessment-step__eyebrow">Step 3</p>
-        <h2 id="wizard-confirm-title" className="assessment-step__title">
-          Profile confirmation
+        <h2 id="wizard-ready-title" className="assessment-step__title">
+          Your profile ready
         </h2>
         <p className="assessment-step__subtitle">
-          Review extracted profile details before generating assessment questions.
+          CV analysis is complete. Review your detected profile and start the assessment.
         </p>
       </header>
 
-      <div className="wizard-confirm-grid">
-        <label>
-          <span>Field</span>
-          <input
-            className="ui-input"
-            value={parsedProfile.field}
-            onChange={(event) => onProfileChange?.('field', event.target.value)}
-            placeholder="Field"
-          />
-        </label>
-        <label>
-          <span>Subjects</span>
-          <input
-            className="ui-input"
-            value={parsedProfile.subjects}
-            onChange={(event) => onProfileChange?.('subjects', event.target.value)}
-            placeholder="Subjects"
-          />
-        </label>
-        <label>
-          <span>Skills</span>
-          <input
-            className="ui-input"
-            value={parsedProfile.skills}
-            onChange={(event) => onProfileChange?.('skills', event.target.value)}
-            placeholder="Skills"
-          />
-        </label>
-        <label>
-          <span>Interests</span>
-          <input
-            className="ui-input"
-            value={parsedProfile.interests}
-            onChange={(event) => onProfileChange?.('interests', event.target.value)}
-            placeholder="Interests"
-          />
-        </label>
-        <label>
-          <span>Preferred careers</span>
-          <input
-            className="ui-input"
-            value={parsedProfile.preferredCareers}
-            onChange={(event) => onProfileChange?.('preferredCareers', event.target.value)}
-            placeholder="Preferred careers"
-          />
-        </label>
-        <label>
-          <span>Age</span>
-          <input
-            className="ui-input"
-            type="number"
-            min="10"
-            max="90"
-            value={parsedProfile.age}
-            onChange={(event) => onProfileChange?.('age', event.target.value)}
-            placeholder="Age"
-          />
-        </label>
-        <label className="wizard-confirm-grid__full">
-          <span>Gender</span>
-          <input
-            className="ui-input"
-            value={parsedProfile.gender}
-            onChange={(event) => onProfileChange?.('gender', event.target.value)}
-            placeholder="Gender"
-          />
-        </label>
+      <div className="wizard-profile-ready">
+        <div className="wizard-profile-ready__block">
+          <h3>Detected field</h3>
+          <p>{summary.field}</p>
+        </div>
+
+        <div className="wizard-profile-ready__block">
+          <h3>Skills</h3>
+          <div className="wizard-profile-ready__chips">
+            {summary.skills.length ? (
+              summary.skills.map((skill) => (
+                <span key={skill} className="wizard-profile-ready__chip">
+                  {skill}
+                </span>
+              ))
+            ) : (
+              <span className="wizard-profile-ready__empty">No skills detected</span>
+            )}
+          </div>
+        </div>
+
+        <div className="wizard-profile-ready__block">
+          <h3>Interests</h3>
+          <div className="wizard-profile-ready__chips">
+            {summary.interests.length ? (
+              summary.interests.map((interest) => (
+                <span key={interest} className="wizard-profile-ready__chip">
+                  {interest}
+                </span>
+              ))
+            ) : (
+              <span className="wizard-profile-ready__empty">No interests detected</span>
+            )}
+          </div>
+        </div>
       </div>
 
+      {isStarting ? (
+        <p className="ui-message ui-message--neutral">Preparing your personalized questions…</p>
+      ) : null}
       {errorMessage ? <p className="ui-message ui-message--error">{errorMessage}</p> : null}
 
       <footer className="assessment-step__actions">
-        <Button variant="ghost" onClick={onBack} disabled={isGenerating}>
+        <Button
+          variant="ghost"
+          onClick={onBack}
+          disabled={isStarting}
+          data-avatar-action="wizard-back-profile"
+          data-avatar-target="start-assessment-cta"
+        >
           Back
         </Button>
-        <Button onClick={onGenerate} disabled={isGenerateDisabled || isGenerating} loading={isGenerating}>
-          Generate Assessment
+        <Button
+          onClick={onStartAssessment}
+          disabled={isStartDisabled || isStarting}
+          loading={isStarting}
+          data-avatar-action="start-assessment"
+          data-avatar-target="start-assessment-cta"
+          data-avatar-hint="Start assessment with first questions."
+        >
+          Start Assessment
         </Button>
       </footer>
     </section>
